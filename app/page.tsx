@@ -16,7 +16,7 @@ const HERO = {
   sub: "We built an AI that designs like the pros. You get stunning logos in under 60 seconds. No skills needed.",
   cta: "Get Early Access →",
   fud: "No spam. Just early access.",
-  waitlistCount: "63,400+",
+  waitlistCount: "63,482+",
 };
 const INITIAL_WAITLIST_COUNT =
   Number(HERO.waitlistCount.replace(/[^0-9]/g, "")) || 0;
@@ -429,13 +429,14 @@ function SignupForm({
         body: JSON.stringify({ email: normalizedEmail }),
       });
 
-      const data = (await res.json().catch(() => null)) as
-        | { error?: string; code?: string; count?: number }
-        | null;
+      const data = (await res.json().catch(() => null)) as {
+        error?: string;
+        code?: string;
+        count?: number;
+      } | null;
 
       if (!res.ok) {
-        const duplicate =
-          data?.code === "23505" || data?.code === "duplicate";
+        const duplicate = data?.code === "23505" || data?.code === "duplicate";
         if (duplicate) {
           setError("Looks like you're already on the list!");
         } else if (data?.error) {
@@ -449,9 +450,7 @@ function SignupForm({
 
       setEmail("");
       setStatus("success");
-      onSuccess?.(
-        typeof data?.count === "number" ? data.count : undefined,
-      );
+      onSuccess?.(typeof data?.count === "number" ? data.count : undefined);
     } catch (err) {
       console.error("Waitlist signup failed", err);
       setError("Network error. Please try again in a moment.");
@@ -510,7 +509,7 @@ function FAQSection() {
   const [openIdx, setOpenIdx] = useState<number | null>(null);
 
   return (
-    <section className="faq-section reveal">
+    <section className="faq-section">
       <div className="section-header">
         <div className="section-tag">FAQ</div>
         <h2>Got questions?</h2>
@@ -652,9 +651,9 @@ export default function Home() {
       try {
         const res = await fetch("/api/waitlist");
         if (!res.ok) return;
-        const data = (await res.json().catch(() => null)) as
-          | { count?: number }
-          | null;
+        const data = (await res.json().catch(() => null)) as {
+          count?: number;
+        } | null;
         if (isMounted && data && typeof data.count === "number") {
           setWaitlistDelta(Math.max(data.count, 0));
         }
@@ -1032,7 +1031,9 @@ export default function Home() {
         </RevealSection>
 
         {/* ── FAQ ── */}
-        <FAQSection />
+        <RevealSection>
+          <FAQSection />
+        </RevealSection>
 
         {/* ── FINAL CTA ── */}
         <RevealSection className="final-cta">
@@ -1062,7 +1063,7 @@ export default function Home() {
           <p className="footer-tagline">{FOOTER.tagline}</p>
           <div className="footer-links">
             {FOOTER.links.map((link) => (
-              <a href="#" key={link}>
+              <a href={link.toLowerCase()} key={link}>
                 {link}
               </a>
             ))}
