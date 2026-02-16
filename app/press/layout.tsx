@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Press Kit — Logo.ai",
+  title: "Logo.ai Media Kit | Press & Brand Assets",
   description:
-    "Press kit for Logo.ai — the AI logo generator launching March 2026.",
+    "Download Logo.ai logos, brand assets, and press materials. Everything journalists and partners need to feature the AI logo generator.",
 };
 
 export default function PressLayout({

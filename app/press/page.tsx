@@ -226,18 +226,6 @@ export default function PressPage() {
       {/* Nav */}
       <nav className="ab-nav">
         <a href="/" className="ab-nav-logo">
-          <svg className="ab-nav-logo-icon" viewBox="0 0 32 32" fill="none">
-            <rect width="32" height="32" rx="8" fill="#050010" />
-            <path
-              d="M10 7v18h12"
-              stroke="white"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-            <circle cx="24" cy="9" r="2.5" fill="white" />
-          </svg>
           <div className="ab-nav-logo-text">
             Logo<span>.</span>ai
           </div>

@@ -24,95 +24,206 @@ const ibmPlexMono = IBM_Plex_Mono({
    ═══════════════════════════════════════════ */
 
 const HERO = {
-  headline: "Why we built this",
-  sub: "The story behind Logo.ai — and why it had to exist.",
+  headline: "Privacy Policy",
+  sub: "Last updated: January 2026",
 };
 
-const STORY_SECTIONS = [
+type Block =
+  | { type: "p"; text: string }
+  | { type: "highlight"; text: string }
+  | { type: "list"; items: string[] };
+
+interface StorySection {
+  tag: string;
+  title: string;
+  blocks: Block[];
+}
+
+const STORY_SECTIONS: StorySection[] = [
   {
-    tag: "The Problem",
-    title: "Great branding shouldn't cost a fortune",
+    tag: "Who We Are",
+    title: "Your privacy matters to us",
     blocks: [
       {
-        type: "p" as const,
-        text: "Everyone's building a brand now — startups, creators, freelancers, side projects. And the first thing every one of them needs is a logo. But getting one? That's where it breaks down.",
+        type: "p",
+        text: "Logo.ai is an AI-powered logo generator. This Privacy Policy explains how we collect, use, and protect your information when you use our website and services.",
       },
       {
-        type: "p" as const,
-        text: "Hire a designer? <strong>$5,000+</strong> and weeks of back-and-forth. Use a logo maker? Cheap — but you end up with a generic template that looks like a million other brands.",
-      },
-      { type: "p" as const, text: "That gap shouldn't exist." },
-    ],
-  },
-  {
-    tag: "The Turning Point",
-    title: "Then AI changed the game",
-    blocks: [
-      {
-        type: "p" as const,
-        text: "When AI started transforming how things are made, we saw the opening we'd been waiting for.",
-      },
-      {
-        type: "highlight" as const,
-        text: "What if getting a world-class logo was as simple as describing your brand? No designers. No templates. No waiting.",
-      },
-      { type: "p" as const, text: "That question became Logo.ai." },
-    ],
-  },
-  {
-    tag: "The Team",
-    title: "Built by people who've done this before",
-    blocks: [
-      {
-        type: "p" as const,
-        text: "<strong>Abhinav and Ashwin Reddy are the serial entrepreneurs and brothers behind Logo.ai.</strong> Over three decades, they've built technology products across every major wave — web, mobile, and now AI — building products used by millions, with multiple successful exits along the way.",
-      },
-      {
-        type: "p" as const,
-        text: "Logo.ai is headquartered in San Francisco, with teams in Singapore, Tallinn, and Dubai.",
+        type: "p",
+        text: "By using Logo.ai, you agree to this policy. If you don\u2019t agree, please don\u2019t use our services.",
       },
     ],
   },
   {
-    tag: "How We Built It",
-    title: "Two years. Thousands of hours. One obsession.",
+    tag: "What We Collect",
+    title: "What info we gather",
     blocks: [
       {
-        type: "p" as const,
-        text: "We paired our best AI engineers with top brand designers. Together, they spent thousands of hours training our AI to understand what actually makes a great logo — the balance, the spacing, the typography, the feel.",
+        type: "p",
+        text: "Right now, we\u2019re in pre-launch mode. Here\u2019s what we collect:",
+      },
+      {
+        type: "list",
+        items: [
+          "<strong>Email address</strong> \u2014 When you join our waitlist or contact us",
+          "<strong>Name</strong> \u2014 If you provide it through our contact form",
+          "<strong>Usage data</strong> \u2014 Basic info like pages visited, browser type, and device (collected automatically)",
+        ],
+      },
+      {
+        type: "p",
+        text: "When we launch, we may also collect:",
+      },
+      {
+        type: "list",
+        items: [
+          "<strong>Account info</strong> \u2014 Name, email, password when you create an account",
+          "<strong>Payment info</strong> \u2014 Processed securely through our payment provider (we don\u2019t store card numbers)",
+          "<strong>Content you create</strong> \u2014 Logos and brand kits you generate",
+        ],
       },
     ],
   },
   {
-    tag: "What We Built",
-    title: "The world's most advanced logo generator",
+    tag: "How We Use It",
+    title: "What we do with your info",
     blocks: [
       {
-        type: "p" as const,
-        text: "Logo.ai doesn't recycle templates. It actually <strong>designs</strong> — from scratch, every single time.",
+        type: "p",
+        text: "We use your information to:",
       },
       {
-        type: "p" as const,
-        text: "Describe your brand. In under 60 seconds, our AI generates stunning, original logos and a complete brand kit — colors, fonts, social media assets, business cards, and brand guidelines. Ready to use anywhere.",
+        type: "list",
+        items: [
+          "Send you updates about our launch and early access",
+          "Respond to your questions and messages",
+          "Improve our website and services",
+          "Process payments (when we launch)",
+          "Provide customer support",
+        ],
       },
       {
-        type: "p" as const,
-        text: 'We showed early demos to founders. Their first reaction? <strong>"This can\'t be real."</strong>',
+        type: "highlight",
+        text: "We will never sell your personal information to third parties.",
       },
-      { type: "p" as const, text: "It is." },
     ],
   },
   {
-    tag: "The Name",
-    title: "A product that earned its name",
+    tag: "Cookies",
+    title: "How we use cookies",
     blocks: [
       {
-        type: "p" as const,
-        text: "When we knew we had something special, we wanted a name that matched.",
+        type: "p",
+        text: "We use cookies to make our site work better. These small files help us:",
       },
       {
-        type: "p" as const,
-        text: "<strong>Logo.ai</strong> — one of the most sought-after domains in the space. We acquired it because the product deserved nothing less. Simple. Direct. Unforgettable.",
+        type: "list",
+        items: [
+          "Remember your preferences",
+          "Understand how people use our site",
+          "Improve your experience",
+        ],
+      },
+      {
+        type: "p",
+        text: "You can turn off cookies in your browser settings, but some features may not work properly.",
+      },
+    ],
+  },
+  {
+    tag: "Third-Party Services",
+    title: "Partners we work with",
+    blocks: [
+      {
+        type: "p",
+        text: "We work with trusted partners to run our service:",
+      },
+      {
+        type: "list",
+        items: [
+          "<strong>Analytics</strong> \u2014 To understand how people use our site",
+          "<strong>Email services</strong> \u2014 To send you updates",
+          "<strong>Payment processors</strong> \u2014 To handle transactions securely (at launch)",
+        ],
+      },
+      {
+        type: "p",
+        text: "These partners have their own privacy policies and only access what they need to do their job.",
+      },
+    ],
+  },
+  {
+    tag: "Your Rights",
+    title: "You\u2019re in control",
+    blocks: [
+      {
+        type: "p",
+        text: "You have control over your data. You can:",
+      },
+      {
+        type: "list",
+        items: [
+          "<strong>Access</strong> \u2014 Ask what info we have about you",
+          "<strong>Correct</strong> \u2014 Fix any incorrect information",
+          "<strong>Delete</strong> \u2014 Request we delete your data",
+          "<strong>Unsubscribe</strong> \u2014 Opt out of marketing emails anytime",
+        ],
+      },
+      {
+        type: "p",
+        text: 'Just email us at <a href="mailto:privacy@logo.ai">privacy@logo.ai</a> and we\u2019ll help you out.',
+      },
+    ],
+  },
+  {
+    tag: "Data Security",
+    title: "How we protect your data",
+    blocks: [
+      {
+        type: "p",
+        text: "We take security seriously. We use industry-standard measures to protect your information, including encryption and secure servers.",
+      },
+      {
+        type: "p",
+        text: "That said, no system is 100% secure. We do our best to protect your data, but we can\u2019t guarantee absolute security.",
+      },
+    ],
+  },
+  {
+    tag: "Children\u2019s Privacy",
+    title: "A note about children",
+    blocks: [
+      {
+        type: "p",
+        text: "Logo.ai is not intended for children under 13. We don\u2019t knowingly collect information from children. If you believe a child has provided us with personal information, please contact us and we\u2019ll delete it.",
+      },
+    ],
+  },
+  {
+    tag: "Changes",
+    title: "Updates to this policy",
+    blocks: [
+      {
+        type: "p",
+        text: "We may update this policy from time to time. If we make big changes, we\u2019ll let you know by email or by posting a notice on our site.",
+      },
+      {
+        type: "p",
+        text: "Keep using Logo.ai after changes means you accept the new policy.",
+      },
+    ],
+  },
+  {
+    tag: "Contact Us",
+    title: "Questions about your privacy?",
+    blocks: [
+      {
+        type: "p",
+        text: "We\u2019re here to help.",
+      },
+      {
+        type: "p",
+        text: 'Email: <a href="mailto:privacy@logo.ai">privacy@logo.ai</a>',
       },
     ],
   },
@@ -120,8 +231,8 @@ const STORY_SECTIONS = [
 
 const CTA = {
   headline: "Be first in line",
-  sub: "We're launching in March 2026. Join 63,482+ founders on the waitlist and lock in founding member pricing — before it's gone.",
-  cta: "Get Early Access →",
+  sub: "We\u2019re launching in March 2026. Join the waitlist and lock in Founding Member pricing \u2014 before it\u2019s gone.",
+  cta: "Get Early Access \u2192",
   fud: "No spam. Just early access.",
 };
 
@@ -137,7 +248,7 @@ const FOOTER = {
    COMPONENTS
    ═══════════════════════════════════════════ */
 
-function AboutSignupForm() {
+function PrivacySignupForm() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -162,7 +273,7 @@ function AboutSignupForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: rawEmail.toLowerCase(),
-          source: "about-page",
+          source: "privacy-page",
         }),
       });
 
@@ -174,11 +285,11 @@ function AboutSignupForm() {
       if (!res.ok) {
         const duplicate = data?.code === "23505" || data?.code === "duplicate";
         if (duplicate) {
-          setError("Looks like you're already on the list!");
+          setError("Looks like you\u2019re already on the list!");
         } else if (data?.error) {
           setError(data.error);
         } else {
-          setError("We couldn't save your email. Please try again.");
+          setError("We couldn\u2019t save your email. Please try again.");
         }
         setStatus("idle");
         return;
@@ -212,7 +323,7 @@ function AboutSignupForm() {
 
   return (
     <>
-      <form className="ab-signup-form" id="ctaForm" onSubmit={handleSubmit}>
+      <form className="ab-signup-form" onSubmit={handleSubmit}>
         <input
           type="email"
           placeholder="Enter your email"
@@ -272,9 +383,9 @@ function RevealSection({
    MAIN PAGE
    ═══════════════════════════════════════════ */
 
-export default function AboutPage() {
+export default function PrivacyPage() {
   return (
-    <div className={`about-page ${sora.variable} ${ibmPlexMono.variable}`}>
+    <div className={`privacy-page ${sora.variable} ${ibmPlexMono.variable}`}>
       {/* Atmosphere */}
       <div className="ab-atmosphere" />
 
@@ -290,7 +401,7 @@ export default function AboutPage() {
             <div className="ab-nav-badge-dot" />
             Coming Soon
           </div>
-          <a href="/#signup" className="ab-nav-cta">
+          <a href="#signup" className="ab-nav-cta">
             Get Early Access
           </a>
         </div>
@@ -301,7 +412,9 @@ export default function AboutPage() {
         {/* Hero */}
         <section className="ab-hero">
           <h1>{HERO.headline}</h1>
-          <p className="ab-hero-sub">{HERO.sub}</p>
+          <p className="ab-hero-sub">
+            <span className="pv-date-tag">{HERO.sub}</span>
+          </p>
         </section>
 
         {/* Story Sections */}
@@ -309,15 +422,27 @@ export default function AboutPage() {
           <RevealSection className="ab-story-section" key={i}>
             <div className="ab-story-tag">{section.tag}</div>
             <h2>{section.title}</h2>
-            {section.blocks.map((block, j) =>
-              block.type === "highlight" ? (
-                <div className="ab-story-highlight" key={j}>
-                  <p dangerouslySetInnerHTML={{ __html: block.text }} />
-                </div>
-              ) : (
+            {section.blocks.map((block, j) => {
+              if (block.type === "highlight") {
+                return (
+                  <div className="ab-story-highlight" key={j}>
+                    <p dangerouslySetInnerHTML={{ __html: block.text }} />
+                  </div>
+                );
+              }
+              if (block.type === "list") {
+                return (
+                  <ul className="pv-policy-list" key={j}>
+                    {block.items.map((item, k) => (
+                      <li key={k} dangerouslySetInnerHTML={{ __html: item }} />
+                    ))}
+                  </ul>
+                );
+              }
+              return (
                 <p key={j} dangerouslySetInnerHTML={{ __html: block.text }} />
-              ),
-            )}
+              );
+            })}
           </RevealSection>
         ))}
 
@@ -328,7 +453,7 @@ export default function AboutPage() {
           <div id="signup">
             <h2>{CTA.headline}</h2>
             <p className="ab-cta-sub">{CTA.sub}</p>
-            <AboutSignupForm />
+            <PrivacySignupForm />
           </div>
         </RevealSection>
       </div>
@@ -339,7 +464,7 @@ export default function AboutPage() {
           <div className="ab-footer-tagline">{FOOTER.tagline}</div>
           <div className="ab-footer-links">
             {FOOTER.links.map((link) => (
-              <a href={link.toLowerCase()} key={link}>
+              <a href={`/${link.toLowerCase()}`} key={link}>
                 {link}
               </a>
             ))}

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
+import { dark } from "@clerk/themes";
 import {
   DM_Sans,
   Space_Mono,
@@ -7,6 +9,8 @@ import {
   Comfortaa,
   Bebas_Neue,
   Fredoka,
+  Sora,
+  IBM_Plex_Mono,
 } from "next/font/google";
 import "./globals.css";
 
@@ -53,10 +57,25 @@ const fredoka = Fredoka({
   weight: ["600"],
 });
 
+const sora = Sora({
+  subsets: ["latin"],
+  variable: "--font-sora",
+  weight: ["300", "400", "500", "600", "700", "800"],
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  variable: "--font-ibm-mono",
+  weight: ["400", "500"],
+});
+
 export const metadata: Metadata = {
-  title: "Logo.ai — The Logo Generator That Changes Everything",
+  title: "AI Logo Generator | Pro Logos in 60 Seconds | Logo.ai",
   description:
-    "AI-powered logo design that creates stunning, original logos and complete brand kits in under 60 seconds. Launching March 2026.",
+    "Skip the $10,000 agency. Get a professional logo and brand kit in 60 seconds. Original AI designs, not templates. No design skills needed.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -65,8 +84,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${spaceMono.variable} ${playfair.variable} ${oswald.variable} ${comfortaa.variable} ${bebasNeue.variable} ${fredoka.variable}`}>
-      <body>{children}</body>
-    </html>
+    <ClerkProvider
+      appearance={{
+        baseTheme: dark,
+      }}
+    >
+      <html
+        lang="en"
+        className={`${dmSans.variable} ${spaceMono.variable} ${playfair.variable} ${oswald.variable} ${comfortaa.variable} ${bebasNeue.variable} ${fredoka.variable} ${sora.variable} ${ibmPlexMono.variable}`}
+      >
+        <body>
+          {children}
+          {/* Floating mobile CTA — visible on all pages, mobile only */}
+          <div className="mobile-float-cta">
+            <a href="/#final-cta" className="mobile-float-btn">
+              Get Early Access &rarr;
+            </a>
+          </div>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

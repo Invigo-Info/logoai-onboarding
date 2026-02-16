@@ -1,25 +1,70 @@
 "use client";
 
 import { useState, useEffect, useRef, FormEvent } from "react";
-import Image from "next/image";
+import { Sora, IBM_Plex_Mono } from "next/font/google";
 
 /* ═══════════════════════════════════════════
-   CONTENT — edit text here, not in JSX
+   FONTS
    ═══════════════════════════════════════════ */
 
-const LAUNCH_DATE = "2026-03-20T09:00:00-08:00";
+const sora = Sora({
+  subsets: ["latin"],
+  variable: "--font-sora",
+  weight: ["300", "400", "500", "600", "700"],
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  variable: "--font-ibm-mono",
+  weight: ["400", "500"],
+});
+
+/* ═══════════════════════════════════════════
+   CONTENT CONFIG — edit text here, not in JSX
+   ═══════════════════════════════════════════ */
+
+const LAUNCH_DATE = "2026-03-20T00:00:00";
 
 const HERO = {
-  badge: "Something Big Is Coming in March 2026",
-  headline: "The logo generator that",
-  headlineHighlight: "changes everything",
+  eyebrow: "Something big is coming in March 2026",
+  headline: "The logo generator that changes everything",
   sub: "We built an AI that designs like the pros. You get stunning logos in under 60 seconds. No skills needed.",
-  cta: "Get Early Access →",
-  fud: "No spam. Just early access.",
+  cta: "Get Early Access \u2192",
+  micro: "No spam. Just early access.",
   waitlistCount: "63,482+",
 };
+
 const INITIAL_WAITLIST_COUNT =
   Number(HERO.waitlistCount.replace(/[^0-9]/g, "")) || 0;
+
+const SOCIAL_PROOF = {
+  avatars: [
+    "https://randomuser.me/api/portraits/women/44.jpg",
+    "https://randomuser.me/api/portraits/men/32.jpg",
+    "https://randomuser.me/api/portraits/women/68.jpg",
+    "https://randomuser.me/api/portraits/men/75.jpg",
+    "https://randomuser.me/api/portraits/women/90.jpg",
+  ],
+};
+
+const LOGO_IMAGES = [
+  "https://images.unsplash.com/photo-1586717799252-bd134f5c8a64?w=400&q=80",
+  "https://images.unsplash.com/photo-1600880292089-90a7e086ee0c?w=400&q=80",
+  "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&q=80",
+  "https://images.unsplash.com/photo-1626785774573-4b799315345d?w=400&q=80",
+  "https://images.unsplash.com/photo-1561070791-2526d30994b5?w=400&q=80",
+  "https://images.unsplash.com/photo-1636955816868-fcb881e57954?w=400&q=80",
+  "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=400&q=80",
+  "https://images.unsplash.com/photo-1558655146-9f40138edfeb?w=400&q=80",
+  "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=400&q=80",
+  "https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=400&q=80",
+  "https://images.unsplash.com/photo-1563986768609-322da13575f2?w=400&q=80",
+  "https://images.unsplash.com/photo-1634942537034-2531766767d1?w=400&q=80",
+  "https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=400&q=80",
+  "https://images.unsplash.com/photo-1524758631624-e2822e304c36?w=400&q=80",
+  "https://images.unsplash.com/photo-1609921212029-bb5a28e60960?w=400&q=80",
+  "https://images.unsplash.com/photo-1567016432779-094069958ea5?w=400&q=80",
+];
 
 const LOGO_GALLERY = {
   tag: "Preview",
@@ -28,164 +73,453 @@ const LOGO_GALLERY = {
   footnote: "All logos above were designed by Logo.ai",
 };
 
-const WHAT_YOU_GET = {
-  tag: "What You Get",
-  headline: "Not just a logo — your complete brand kit",
-  sub: "Everything you need to launch a professional brand, all in one place.",
-  caption: {
-    text: "One logo becomes ",
-    highlight: "an entire brand",
-    suffix: " — merch, cards, social, apps & more",
+const KIT_ITEMS = [
+  {
+    title: "Logo Files",
+    desc: "PNG, SVG, PDF \u2014 full color, black, white, and transparent versions.",
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+        <path d="M2 17l10 5 10-5" />
+        <path d="M2 12l10 5 10-5" />
+      </svg>
+    ),
   },
-  items: [
-    {
-      title: "Logo Files",
-      desc: "PNG, SVG, PDF — full color, black, white, and transparent versions.",
-      icon: "layers",
-    },
-    {
-      title: "Logo Variations",
-      desc: "Primary, horizontal, vertical, icon, and favicon — every format you need.",
-      icon: "grid",
-    },
-    {
-      title: "Dark + Light Modes",
-      desc: "Logos optimized for dark and light backgrounds.",
-      icon: "moon",
-    },
-    {
-      title: "Color Palette",
-      desc: "HEX, RGB, CMYK codes — web and print ready.",
-      icon: "target",
-    },
-    {
-      title: "Font Pairing",
-      desc: "Primary and secondary fonts — perfectly matched.",
-      icon: "pen",
-    },
-    {
-      title: "Social Media Kit",
-      desc: "Profile pics, covers, post templates — sized for all platforms.",
-      icon: "share",
-    },
-    {
-      title: "Business Essentials",
-      desc: "Business cards, letterhead, email signature, invoice template.",
-      icon: "briefcase",
-    },
-    {
-      title: "App Icons",
-      desc: "iOS, Android, and web — every size you need.",
-      icon: "phone",
-    },
-    {
-      title: "Brand Guidelines",
-      desc: "How to use everything — do's, don'ts, and best practices.",
-      icon: "doc",
-    },
-  ],
-};
-
-const HOW_IT_WORKS = {
-  tag: "How It Works",
-  headline: "3 steps. 60 seconds. Done.",
-  sub: "It's that simple.",
-  steps: [
-    {
-      title: "Tell us about your brand",
-      desc: "Answer a few quick questions. Your business name. Your industry. Your style.",
-    },
-    {
-      title: "AI does the work",
-      desc: "Our AI creates dozens of unique logo ideas — built around your brand, not from a template library.",
-    },
-    {
-      title: "Make it yours",
-      desc: "Pick your favorite. Tweak it if you want. Download and own it forever.",
-    },
-  ],
-};
-
-const USE_EVERYWHERE = {
-  tag: "Use It Everywhere",
-  headline: "Your logo, wherever you need it",
-  items: [
-    { title: "Website & Apps", desc: "Build trust before the first click." },
-    { title: "Social Media", desc: "Stand out in every feed." },
-    { title: "Business Cards", desc: "Make a memorable first impression." },
-    {
-      title: "Packaging & Products",
-      desc: "Turn every box into a brand moment.",
-    },
-    { title: "Merch & Swag", desc: "Your brand, out in the world." },
-    {
-      title: "Invoices & Proposals",
-      desc: "Look established on every document.",
-    },
-  ],
-};
-
-const WHO_ITS_FOR = {
-  tag: "Who It's For",
-  headline: "Built for businesses like yours",
-  items: [
-    "Startups & New Businesses",
-    "E-commerce & Online Stores",
-    "Restaurants & Cafes",
-    "Consultants & Freelancers",
-    "Fitness & Wellness",
-    "Creatives & Agencies",
-  ],
-};
-
-const WHY_JOIN = {
-  tag: "Why Join Now",
-  headline: "Early access = best perks",
-  items: [
-    {
-      title: "Founding Member Pricing",
-      desc: "Lock in the lowest price — forever. This rate disappears at launch.",
-    },
-    {
-      title: "Free Credits at Launch",
-      desc: "Your first logos are on us. Create and download — no charge.",
-    },
-    {
-      title: "Shape the Product",
-      desc: "Tell us what features matter most. Early members help us build what you need.",
-    },
-    {
-      title: "Skip the Line",
-      desc: "First in when we go live. No waiting. No queues.",
-    },
-  ],
-  scarcity: {
-    prefix: "Only ",
-    count: "100,000 spots",
-    suffix: " available. Then they're gone.",
+  {
+    title: "Logo Variations",
+    desc: "Primary, horizontal, vertical, icon, and favicon \u2014 every format you need.",
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="3" y="3" width="7" height="7" />
+        <rect x="14" y="3" width="7" height="7" />
+        <rect x="3" y="14" width="7" height="7" />
+        <rect x="14" y="14" width="7" height="7" />
+      </svg>
+    ),
   },
-};
+  {
+    title: "Dark + Light Modes",
+    desc: "Logos optimized for dark and light backgrounds.",
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+      </svg>
+    ),
+  },
+  {
+    title: "Color Palette",
+    desc: "HEX, RGB, CMYK codes \u2014 web and print ready.",
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <circle cx="12" cy="12" r="6" />
+        <circle cx="12" cy="12" r="2" />
+      </svg>
+    ),
+  },
+  {
+    title: "Font Pairing",
+    desc: "Primary and secondary fonts \u2014 perfectly matched.",
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M4 7V4h16v3" />
+        <path d="M9 20h6" />
+        <path d="M12 4v16" />
+      </svg>
+    ),
+  },
+  {
+    title: "Social Media Kit",
+    desc: "Profile pics, covers, post templates \u2014 sized for all platforms.",
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z" />
+      </svg>
+    ),
+  },
+  {
+    title: "Business Essentials",
+    desc: "Business cards, letterhead, email signature, invoice template.",
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="2" y="3" width="20" height="14" rx="2" />
+        <path d="M8 21h8" />
+        <path d="M12 17v4" />
+      </svg>
+    ),
+  },
+  {
+    title: "App Icons",
+    desc: "iOS, Android, and web \u2014 every size you need.",
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="5" y="2" width="14" height="20" rx="2" />
+        <path d="M12 18h.01" />
+      </svg>
+    ),
+  },
+  {
+    title: "Brand Guidelines",
+    desc: "How to use everything \u2014 do\u2019s, don\u2019ts, and best practices.",
+    icon: (
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+      </svg>
+    ),
+  },
+];
+
+const HOW_STEPS = [
+  {
+    num: "1",
+    title: "Tell us about your brand",
+    desc: "Answer a few quick questions. Your business name. Your industry. Your style.",
+  },
+  {
+    num: "2",
+    title: "AI does the work",
+    desc: "Our AI creates dozens of unique logo ideas \u2014 built around your brand, not from a template library.",
+  },
+  {
+    num: "3",
+    title: "Make it yours",
+    desc: "Pick your favorite. Tweak it if you want. Download and own it forever.",
+  },
+];
+
+const USE_CASES = [
+  {
+    img: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&q=80",
+    title: "Website & Apps",
+    desc: "Build trust before the first click.",
+  },
+  {
+    img: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=600&q=80",
+    title: "Social Media",
+    desc: "Stand out in every feed.",
+  },
+  {
+    img: "https://images.unsplash.com/photo-1572502742907-46ab4e0e8552?w=600&q=80",
+    title: "Business Cards",
+    desc: "Make a memorable first impression.",
+  },
+  {
+    img: "https://images.unsplash.com/photo-1636622433525-f6a10a161414?w=600&q=80",
+    title: "Packaging & Products",
+    desc: "Turn every box into a brand moment.",
+  },
+  {
+    img: "https://images.unsplash.com/photo-1562157873-818bc0726f68?w=600&q=80",
+    title: "Merch & Swag",
+    desc: "Your brand, out in the world.",
+  },
+  {
+    img: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=600&q=80",
+    title: "Invoices & Proposals",
+    desc: "Look established on every document.",
+  },
+];
+
+const AUDIENCE = [
+  {
+    label: "Startups & New Businesses",
+    icon: (
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+        <polyline points="22 4 12 14.01 9 11.01" />
+      </svg>
+    ),
+  },
+  {
+    label: "E-commerce & Online Stores",
+    icon: (
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="9" cy="21" r="1" />
+        <circle cx="20" cy="21" r="1" />
+        <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
+      </svg>
+    ),
+  },
+  {
+    label: "Restaurants & Cafes",
+    icon: (
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M18 8h1a4 4 0 010 8h-1" />
+        <path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z" />
+        <line x1="6" y1="1" x2="6" y2="4" />
+        <line x1="10" y1="1" x2="10" y2="4" />
+        <line x1="14" y1="1" x2="14" y2="4" />
+      </svg>
+    ),
+  },
+  {
+    label: "Consultants & Freelancers",
+    icon: (
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    ),
+  },
+  {
+    label: "Fitness & Wellness",
+    icon: (
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M18 20V10" />
+        <path d="M12 20V4" />
+        <path d="M6 20v-6" />
+      </svg>
+    ),
+  },
+  {
+    label: "Creatives & Agencies",
+    icon: (
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+      </svg>
+    ),
+  },
+];
+
+const PERKS = [
+  {
+    title: "Founding Member Pricing",
+    desc: "Lock in the lowest price \u2014 forever. This rate disappears at launch.",
+    icon: (
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <line x1="12" y1="1" x2="12" y2="23" />
+        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+      </svg>
+    ),
+  },
+  {
+    title: "Free Credits at Launch",
+    desc: "Your first logos are on us. Create and download \u2014 no charge.",
+    icon: (
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polyline points="20 12 20 22 4 22 4 12" />
+        <rect x="2" y="7" width="20" height="5" />
+        <line x1="12" y1="22" x2="12" y2="7" />
+        <path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z" />
+        <path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z" />
+      </svg>
+    ),
+  },
+  {
+    title: "Shape the Product",
+    desc: "Tell us what features matter most. Early members help us build what you need.",
+    icon: (
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+      </svg>
+    ),
+  },
+  {
+    title: "Skip the Line",
+    desc: "First in when we go live. No waiting. No queues.",
+    icon: (
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+      </svg>
+    ),
+  },
+];
 
 const FAQ_ITEMS = [
   {
-    q: "I'm just starting out. Is this worth it?",
-    a: "Absolutely. A great logo helps you attract customers from day one — without blowing your startup budget.",
+    q: "I\u2019m just starting out. Is this worth it?",
+    a: "Absolutely. A great logo helps you attract customers from day one \u2014 without blowing your startup budget.",
   },
   {
     q: "How is this different from other logo makers?",
-    a: "Most tools recycle the same templates. Logo.ai actually designs — from scratch. You get stunning logos and a complete brand kit, built just for you.",
+    a: "Most logo tools just swap names on old templates. Logo.ai actually designs \u2014 from scratch, every single time. You get stunning logos and a complete brand kit, built just for you.",
   },
   {
     q: "Will my logo be unique?",
-    a: "Yes. Every logo is created fresh for your brand — no recycled templates, no duplicates. It's 100% yours.",
+    a: "Yes. Every logo is created fresh for your brand \u2014 no recycled templates, no duplicates. It\u2019s 100% yours.",
   },
   {
     q: "Do I own what Logo.ai creates?",
-    a: "Yes. Full commercial rights. Use your logo and brand kit anywhere — your website, products, merch, everywhere.",
+    a: "Yes. Full commercial rights. Use your logo and brand kit anywhere \u2014 your website, products, merch, everywhere.",
   },
   {
     q: "What formats are included?",
-    a: "PNG, SVG, and PDF — ready for web, print, and everything in between.",
+    a: "PNG, SVG, and PDF \u2014 ready for web, print, and everything in between.",
   },
   {
     q: "When do you launch?",
@@ -194,161 +528,28 @@ const FAQ_ITEMS = [
 ];
 
 const FINAL_CTA = {
-  headline: "Ready to build a brand",
-  headlineHighlight: "stands out?",
-  sub: "Join 100,000+ founders waiting for launch. Get early access, free credits, and the lowest price — forever.",
-  cta: "Get Early Access →",
-  fud: "No credit card. No risk. Just a head start.",
+  headline: "Ready to build a brand that stands out?",
+  sub: "Join 63,482+ founders on the waitlist. Get early access, free credits, and the lowest price \u2014 forever.",
+  cta: "Get Early Access \u2192",
+  micro: "No credit card. No risk. Just a head start.",
 };
 
 const FOOTER = {
   tagline: "Pro logos. Brand kits. Stunning results.",
-  links: ["About", "Contact", "Press", "Privacy", "Terms"],
-  copy: "© 2026 logo.ai",
+  links: [
+    { label: "About", href: "/about" },
+    { label: "Contact", href: "#" },
+    { label: "Press", href: "/press" },
+    { label: "Privacy", href: "#" },
+    { label: "Terms", href: "#" },
+  ],
+  copy: "\u00a9 2026 Logo.ai",
   disclaimer:
     "Logo.ai is an independent service. Not affiliated with any other company.",
 };
 
 /* ═══════════════════════════════════════════
-   SVG ICONS
-   ═══════════════════════════════════════════ */
-
-const icons: Record<string, React.ReactNode> = {
-  layers: (
-    <svg viewBox="0 0 24 24">
-      <path d="M12 2L2 7l10 5 10-5-10-5z" />
-      <path d="M2 17l10 5 10-5" />
-      <path d="M2 12l10 5 10-5" />
-    </svg>
-  ),
-  grid: (
-    <svg viewBox="0 0 24 24">
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-    </svg>
-  ),
-  moon: (
-    <svg viewBox="0 0 24 24">
-      <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-    </svg>
-  ),
-  target: (
-    <svg viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
-    </svg>
-  ),
-  pen: (
-    <svg viewBox="0 0 24 24">
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
-    </svg>
-  ),
-  share: (
-    <svg viewBox="0 0 24 24">
-      <path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z" />
-    </svg>
-  ),
-  briefcase: (
-    <svg viewBox="0 0 24 24">
-      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-      <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16" />
-    </svg>
-  ),
-  phone: (
-    <svg viewBox="0 0 24 24">
-      <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-      <path d="M12 18h.01" />
-    </svg>
-  ),
-  doc: (
-    <svg viewBox="0 0 24 24">
-      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-      <polyline points="10 9 9 9 8 9" />
-    </svg>
-  ),
-  rocket: (
-    <svg viewBox="0 0 24 24">
-      <path d="M22 2L11 13" />
-      <polygon points="22 2 15 22 11 13 2 9 22 2" />
-    </svg>
-  ),
-  cart: (
-    <svg viewBox="0 0 24 24">
-      <circle cx="9" cy="21" r="1" />
-      <circle cx="20" cy="21" r="1" />
-      <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
-    </svg>
-  ),
-  coffee: (
-    <svg viewBox="0 0 24 24">
-      <path d="M18 8h1a4 4 0 010 8h-1" />
-      <path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z" />
-      <line x1="6" y1="1" x2="6" y2="4" />
-      <line x1="10" y1="1" x2="10" y2="4" />
-      <line x1="14" y1="1" x2="14" y2="4" />
-    </svg>
-  ),
-  chart: (
-    <svg viewBox="0 0 24 24">
-      <path d="M18 20V10" />
-      <path d="M12 20V4" />
-      <path d="M6 20v-6" />
-    </svg>
-  ),
-  star: (
-    <svg viewBox="0 0 24 24">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  ),
-  lock: (
-    <svg viewBox="0 0 24 24">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0110 0v4" />
-    </svg>
-  ),
-  gift: (
-    <svg viewBox="0 0 24 24">
-      <path d="M20 12v10H4V12" />
-      <path d="M2 7h20v5H2z" />
-      <path d="M12 22V7" />
-      <path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z" />
-      <path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z" />
-    </svg>
-  ),
-  wrench: (
-    <svg viewBox="0 0 24 24">
-      <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
-    </svg>
-  ),
-  bolt: (
-    <svg viewBox="0 0 24 24">
-      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-    </svg>
-  ),
-  chevron: (
-    <svg viewBox="0 0 16 16" fill="none">
-      <path
-        d="M4 6l4 4 4-4"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  ),
-};
-
-const whoIcons = ["rocket", "cart", "coffee", "briefcase", "chart", "star"];
-const whyIcons = ["lock", "gift", "wrench", "bolt"];
-
-/* ═══════════════════════════════════════════
-   COMPONENTS
+   INTERNAL COMPONENTS
    ═══════════════════════════════════════════ */
 
 function Countdown() {
@@ -375,16 +576,21 @@ function Countdown() {
     return () => clearInterval(id);
   }, []);
 
+  const units = [
+    { key: "d", label: "Days" },
+    { key: "h", label: "Hours" },
+    { key: "m", label: "Min" },
+    { key: "s", label: "Sec" },
+  ] as const;
+
   return (
     <div className="countdown-wrap">
       <div className="countdown-label">Launch Countdown</div>
       <div className="countdown">
-        {(["d", "h", "m", "s"] as const).map((k, i) => (
-          <div className="cd-unit" key={k}>
-            <div className="cd-num">{time[k]}</div>
-            <div className="cd-lbl">
-              {["Days", "Hours", "Minutes", "Seconds"][i]}
-            </div>
+        {units.map((u) => (
+          <div key={u.key} className="countdown-unit">
+            <div className="countdown-num">{time[u.key]}</div>
+            <div className="countdown-text">{u.label}</div>
           </div>
         ))}
       </div>
@@ -394,13 +600,17 @@ function Countdown() {
 
 function SignupForm({
   id,
+  formClassName,
   ctaText,
-  fudText,
+  microText,
+  microClassName,
   onSuccess,
 }: {
   id: string;
+  formClassName: string;
   ctaText: string;
-  fudText: string;
+  microText: string;
+  microClassName: string;
   onSuccess?: (nextCount?: number) => void;
 }) {
   const [email, setEmail] = useState("");
@@ -438,11 +648,11 @@ function SignupForm({
       if (!res.ok) {
         const duplicate = data?.code === "23505" || data?.code === "duplicate";
         if (duplicate) {
-          setError("Looks like you're already on the list!");
+          setError("Looks like you\u2019re already on the list!");
         } else if (data?.error) {
           setError(data.error);
         } else {
-          setError("We couldn't save your email. Please try again.");
+          setError("We couldn\u2019t save your email. Please try again.");
         }
         setStatus("idle");
         return;
@@ -460,27 +670,25 @@ function SignupForm({
 
   if (status === "success") {
     return (
-      <>
-        <div className="signup-success" style={{ display: "flex" }}>
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <circle cx="9" cy="9" r="9" fill="currentColor" opacity=".15" />
-            <path
-              d="M5.5 9.5l2 2 5-5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          You&apos;re in! We&apos;ll email you before launch day.
-        </div>
-      </>
+      <div className="signup-success show">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <circle cx="9" cy="9" r="9" fill="currentColor" opacity="0.15" />
+          <path
+            d="M5.5 9.5l2 2 5-5"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        You&apos;re in! We&apos;ll email you before launch day.
+      </div>
     );
   }
 
   return (
     <>
-      <form className="signup-form" id={id} onSubmit={handleSubmit}>
+      <form className={formClassName} id={id} onSubmit={handleSubmit}>
         <input
           type="email"
           placeholder="you@company.com"
@@ -488,19 +696,21 @@ function SignupForm({
           aria-label="Email"
           name="email"
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          onChange={(e) => setEmail(e.target.value)}
           disabled={status === "loading"}
         />
-        <button
-          type="submit"
-          className="btn-primary"
-          disabled={status === "loading"}
-        >
-          {status === "loading" ? "Saving..." : ctaText}
-        </button>
+        <div className="cta-wrap">
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={status === "loading"}
+          >
+            {status === "loading" ? "Saving..." : ctaText}
+          </button>
+        </div>
       </form>
       {error && <p className="signup-error">{error}</p>}
-      <p className="signup-note">{fudText}</p>
+      <p className={microClassName}>{microText}</p>
     </>
   );
 }
@@ -509,37 +719,32 @@ function FAQSection() {
   const [openIdx, setOpenIdx] = useState<number | null>(null);
 
   return (
-    <section className="faq-section">
-      <div className="section-header">
-        <div className="section-tag">FAQ</div>
-        <h2>Got questions?</h2>
-      </div>
-      <div className="faq-list">
-        {FAQ_ITEMS.map((item, i) => (
-          <div className={`faq-item${openIdx === i ? " open" : ""}`} key={i}>
-            <button
-              className="faq-q"
-              onClick={() => setOpenIdx(openIdx === i ? null : i)}
-            >
-              {item.q}
-              <span className="faq-arrow">{icons.chevron}</span>
-            </button>
-            <div className="faq-a">
-              <p>{item.a}</p>
-            </div>
+    <div className="faq-list">
+      {FAQ_ITEMS.map((item, i) => (
+        <div key={i} className={`faq-item${openIdx === i ? " open" : ""}`}>
+          <button
+            className="faq-q"
+            onClick={() => setOpenIdx(openIdx === i ? null : i)}
+          >
+            {item.q}
+          </button>
+          <div className="faq-a">
+            <p>{item.a}</p>
           </div>
-        ))}
-      </div>
-    </section>
+        </div>
+      ))}
+    </div>
   );
 }
 
 function RevealSection({
   children,
-  className = "",
+  className = "s",
+  id,
 }: {
   children: React.ReactNode;
   className?: string;
+  id?: string;
 }) {
   const ref = useRef<HTMLElement>(null);
 
@@ -550,93 +755,119 @@ function RevealSection({
       ([entry]) => {
         if (entry.isIntersecting) el.classList.add("visible");
       },
-      { threshold: 0.12 },
+      { threshold: 0.08 },
     );
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
 
   return (
-    <section ref={ref} className={`reveal ${className}`}>
+    <section ref={ref} id={id} className={`${className} animate`}>
       {children}
     </section>
   );
 }
 
-/* ═══════════════════════════════════════════
-   LOGO GALLERY DATA
-   ═══════════════════════════════════════════ */
-
-const logoCards = [
-  {
-    cls: "lc-caseys",
-    name: (
-      <>
-        Casey&apos;s
-        <br />
-        Corner
-      </>
-    ),
-  },
-  {
-    cls: "lc-surefire",
-    name: (
-      <>
-        Sure <span>Fire</span>
-      </>
-    ),
-    sub: "Recording Studio",
-  },
-  { cls: "lc-balibelle", name: "Bali Belle", sub: "Resort & Spa" },
-  {
-    cls: "lc-tappt",
-    name: (
-      <>
-        tappt<span>°</span>
-      </>
-    ),
-  },
-  { cls: "lc-oneplanet", name: "OnePlanet" },
-  { cls: "lc-powerpacks", name: "Power Packs" },
-  { cls: "lc-homespace", name: "Homespace", sub: "Real Estate" },
-  { cls: "lc-caroma", name: "✦ Caroma" },
-  {
-    cls: "lc-dreamery",
-    name: (
-      <>
-        <span>◐</span> dreamery
-      </>
-    ),
-  },
-  {
-    cls: "lc-heartly",
-    name: (
-      <>
-        Heartly <span>♥</span> Organic
-      </>
-    ),
-  },
-  { cls: "lc-sandra", name: "Sandra Harvey" },
-  {
-    cls: "lc-circleflow",
-    name: (
-      <>
-        ○ <span>Circle</span> Flow
-      </>
-    ),
-  },
-  { cls: "lc-aredian", name: "aredian", sub: "Self Care Studio" },
-  { cls: "lc-headlines", name: "Headlines", sub: "Hair Salon" },
-  { cls: "lc-petescoffee", name: "Pete's Coffee" },
-  {
-    cls: "lc-chilltea",
-    name: (
-      <>
-        <span>☘</span> Chill Tea
-      </>
-    ),
-  },
-];
+function MockupCollage() {
+  return (
+    <div className="mockup-wrap">
+      <div className="mockup-glow"></div>
+      <div className="mockup-collage">
+        {/* Business Card */}
+        <div
+          className="m-item m-bcard"
+          style={{ top: "6%", left: "3%", transform: "rotate(-5deg)" }}
+        >
+          <div className="m-bcard-logo">&#9670;</div>
+          <div className="m-bcard-name">PRIAMO</div>
+          <div className="m-bcard-sub">Brand Studio</div>
+        </div>
+        {/* Name Card */}
+        <div
+          className="m-item m-namecard"
+          style={{ top: "28%", left: "1%", transform: "rotate(-2deg)" }}
+        >
+          <div className="m-nc-name">Sarah Chen</div>
+          <div className="m-nc-role">Creative Director</div>
+        </div>
+        {/* Social Post */}
+        <div className="m-item m-social" style={{ bottom: "2%", left: "6%" }}>
+          <div className="m-social-head">
+            <div className="m-social-av"></div>
+            <div className="m-social-bar"></div>
+          </div>
+          <div className="m-social-img">
+            <div className="m-social-img-icon">&#9670;</div>
+          </div>
+          <div className="m-social-actions">
+            <div className="m-dot"></div>
+            <div className="m-dot"></div>
+            <div className="m-dot"></div>
+          </div>
+        </div>
+        {/* Typography */}
+        <div className="m-item m-typo" style={{ top: "40%", left: "26%" }}>
+          Aa
+        </div>
+        {/* Hoodie */}
+        <div
+          className="m-item m-hoodie"
+          style={{ top: "0", left: "50%", transform: "translateX(-50%)" }}
+        >
+          <div className="m-hood"></div>
+          <div className="m-hoodie-body">
+            <div className="m-hoodie-logo">&#9670;</div>
+          </div>
+        </div>
+        {/* Phone */}
+        <div
+          className="m-item m-phone"
+          style={{ bottom: "0", left: "50%", transform: "translateX(-50%)" }}
+        >
+          <div className="m-phone-notch"></div>
+          <div className="m-phone-icon">&#9670;</div>
+          <div className="m-phone-brand">Priamo</div>
+          <div className="m-phone-tag">Brand Studio</div>
+          <div className="m-phone-btns">
+            <div className="m-phone-btn"></div>
+            <div className="m-phone-btn"></div>
+          </div>
+        </div>
+        {/* Logo Mark */}
+        <div className="m-item m-logomark" style={{ top: "2%", right: "3%" }}>
+          <div className="m-lm-sym">&#9670;</div>
+          <div className="m-lm-txt">PRIAMO</div>
+          <div className="m-lm-corner"></div>
+        </div>
+        {/* Color Swatches */}
+        <div className="m-item m-swatches" style={{ top: "34%", right: "5%" }}>
+          <div className="m-swatch" style={{ background: "#2D5A3D" }}></div>
+          <div className="m-swatch" style={{ background: "#8B8B80" }}></div>
+          <div className="m-swatch" style={{ background: "#C4C0B6" }}></div>
+        </div>
+        {/* ID Card 1 */}
+        <div className="m-item m-id" style={{ bottom: "22%", right: "1%" }}>
+          <div className="m-id-av"></div>
+          <div className="m-id-info">
+            <div className="m-id-n">Sarah Chen</div>
+            <div className="m-id-r">Creative Director</div>
+          </div>
+        </div>
+        {/* ID Card 2 */}
+        <div
+          className="m-item m-id"
+          style={{ bottom: "6%", right: "3%", transform: "rotate(1deg)" }}
+        >
+          <div className="m-id-av"></div>
+          <div className="m-id-info">
+            <div className="m-id-n">James Park</div>
+            <div className="m-id-r">Brand Manager</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ═══════════════════════════════════════════
    MAIN PAGE
@@ -644,6 +875,7 @@ const logoCards = [
 
 export default function Home() {
   const [waitlistDelta, setWaitlistDelta] = useState(0);
+  const heroRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -667,6 +899,19 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    const el = heroRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) el.classList.add("visible");
+      },
+      { threshold: 0.1 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
   const handleSignupSuccess = (nextCount?: number) => {
     setWaitlistDelta((prev) => {
       if (typeof nextCount === "number" && Number.isFinite(nextCount)) {
@@ -676,402 +921,260 @@ export default function Home() {
     });
   };
 
-  const waitlistDisplay = `${(
-    INITIAL_WAITLIST_COUNT + waitlistDelta
-  ).toLocaleString()}+`;
+  const waitlistDisplay = `${(INITIAL_WAITLIST_COUNT + waitlistDelta).toLocaleString()}+`;
 
   return (
     <>
-      {/* Ambient Background */}
-      <div className="ambient-bg">
-        <div className="orb orb-1" />
-        <div className="orb orb-2" />
-        <div className="orb orb-3" />
-      </div>
-      <div className="grain" />
+      {/* <div className="page-atmosphere"></div>
+      <div className="page-grain"></div> */}
+      <div className={`home-page ${sora.variable} ${ibmPlexMono.variable}`}>
+        <div className="ab-atmosphere" />
 
-      {/* Nav */}
-      <nav className="nav">
-        <a href="#" className="nav-logo">
-          <svg
-            className="nav-logo-svg"
-            width="108"
-            height="28"
-            viewBox="0 0 108 28"
-            fill="none"
-          >
-            <rect
-              x="0"
-              y="0"
-              width="28"
-              height="28"
-              rx="7"
-              fill="rgba(255,255,255,0.08)"
-            />
-            <path
-              d="M9 7v14h10"
-              stroke="url(#logoGrad)"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-            <circle cx="21" cy="9" r="2" fill="url(#logoGrad)" />
-            <text
-              x="36"
-              y="19.5"
-              fontFamily="var(--font-dm-sans), sans-serif"
-              fontSize="16"
-              fontWeight="600"
-              fill="#f0f0f5"
-              letterSpacing="-0.5"
-            >
-              logo<tspan fill="#4df0c8">.ai</tspan>
-            </text>
-            <defs>
-              <linearGradient id="logoGrad" x1="0" y1="0" x2="28" y2="28">
-                <stop offset="0%" stopColor="#4df0c8" />
-                <stop offset="100%" stopColor="#6c63ff" />
-              </linearGradient>
-            </defs>
-          </svg>
-        </a>
-        <div className="nav-right">
-          <div className="nav-tag">
-            <span
-              className="live-dot"
-              style={{
-                display: "inline-block",
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: "var(--accent)",
-                marginRight: 6,
-              }}
-            />
-            Coming Soon
-          </div>
-          <a href="#signup" className="nav-cta">
-            Get Early Access
+        {/* NAV */}
+        <nav className="ab-nav">
+          <a href="/" className="ab-nav-logo">
+            <div className="ab-nav-logo-text">
+              Logo<span>.</span>ai
+            </div>
           </a>
-        </div>
-      </nav>
-
-      {/* Page Content */}
-      <div className="page-wrap">
-        {/* ── HERO ── */}
-        <section className="hero">
-          <div className="hero-badge">
-            <span className="live-dot" />
-            {HERO.badge}
-          </div>
-          <h1>
-            {HERO.headline}
-            <br />
-            <span className="gradient-text">{HERO.headlineHighlight}</span>
-          </h1>
-          <p className="hero-sub">{HERO.sub}</p>
-
-          <SignupForm
-            id="heroForm"
-            ctaText={HERO.cta}
-            fudText={HERO.fud}
-            onSuccess={handleSignupSuccess}
-          />
-
-          <div className="wl-inline">
-            <div className="wl-avatars">
-              {[32, 47, 12, 26, 5].map((n) => (
-                <img
-                  key={n}
-                  className="wl-face"
-                  src={`https://i.pravatar.cc/56?img=${n}`}
-                  alt=""
-                />
-              ))}
+          <div className="ab-nav-right">
+            <div className="ab-nav-badge">
+              <div className="ab-nav-badge-dot" />
+              Coming Soon
             </div>
-            <span className="wl-label">
-              Join <strong>{waitlistDisplay}</strong> founders on the waitlist
-            </span>
+            <a href="/#signup" className="ab-nav-cta">
+              Get Early Access
+            </a>
           </div>
+        </nav>
 
-          <Countdown />
-        </section>
-
-        {/* ── LOGO SHOWCASE ── */}
-        <RevealSection className="showcase">
-          <div className="section-header">
-            <div className="section-tag">{LOGO_GALLERY.tag}</div>
-            <h2>{LOGO_GALLERY.headline}</h2>
-            <p>{LOGO_GALLERY.sub}</p>
-          </div>
-          <div className="logo-gallery">
-            {logoCards.map((card, i) => (
-              <div className={`logo-card ${card.cls}`} key={i}>
-                <div className="logo-name">{card.name}</div>
-                {card.sub && <div className="logo-sub">{card.sub}</div>}
-              </div>
-            ))}
-          </div>
-          <p className="logo-made-tag">{LOGO_GALLERY.footnote}</p>
-        </RevealSection>
-
-        {/* ── WHAT YOU GET ── */}
-        <RevealSection className="what-you-get">
-          <div className="section-header">
-            <div className="section-tag">{WHAT_YOU_GET.tag}</div>
-            <h2>{WHAT_YOU_GET.headline}</h2>
-            <p>{WHAT_YOU_GET.sub}</p>
-          </div>
-          <div className="wyg-showcase">
-            <Image
-              src="/brand-kit.png"
-              alt="Complete brand kit"
-              width={580}
-              height={400}
-              style={{ width: "100%", height: "auto" }}
-            />
-            <div className="wyg-showcase-caption">
-              <p>
-                {WHAT_YOU_GET.caption.text}
-                <strong>{WHAT_YOU_GET.caption.highlight}</strong>
-                {WHAT_YOU_GET.caption.suffix}
-              </p>
+        <div className="page-wrap">
+          {/* ═══ HERO ═══ */}
+          <section className="hero" ref={heroRef}>
+            <div className="hero-eyebrow">
+              <div className="dot"></div>
+              {HERO.eyebrow}
             </div>
-          </div>
-          <div className="wyg-grid">
-            {WHAT_YOU_GET.items.map((item, i) => (
-              <div className="wyg-card" key={i}>
-                <div className="wyg-icon">{icons[item.icon]}</div>
-                <h4>{item.title}</h4>
-                <p>{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </RevealSection>
+            <h1>{HERO.headline}</h1>
+            <p className="hero-sub">{HERO.sub}</p>
 
-        {/* ── HOW IT WORKS ── */}
-        <RevealSection className="how-section">
-          <div className="section-header">
-            <div className="section-tag">{HOW_IT_WORKS.tag}</div>
-            <h2>{HOW_IT_WORKS.headline}</h2>
-            <p>{HOW_IT_WORKS.sub}</p>
-          </div>
-          <div className="steps-container">
-            {HOW_IT_WORKS.steps.map((step, i) => (
-              <div className="step-item" key={i}>
-                <div className="step-number">{i + 1}</div>
-                <div className="step-content">
-                  <h3>{step.title}</h3>
-                  <p>{step.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </RevealSection>
-
-        {/* ── USE IT EVERYWHERE ── */}
-        <RevealSection className="use-section">
-          <div className="section-header">
-            <div className="section-tag">{USE_EVERYWHERE.tag}</div>
-            <h2>{USE_EVERYWHERE.headline}</h2>
-          </div>
-          <div className="use-grid">
-            {/* Website */}
-            <div className="use-card">
-              <div className="use-mockup um-website">
-                <div className="um-website-inner">
-                  <div className="um-browser-bar">
-                    <div className="um-browser-dot" />
-                    <div className="um-browser-dot" />
-                    <div className="um-browser-dot" />
-                    <div className="um-browser-url" />
-                  </div>
-                  <div className="um-site-content">
-                    <div className="um-site-logo">✦ CASEY&apos;S CORNER</div>
-                    <div className="um-site-nav">
-                      <span />
-                      <span />
-                      <span />
-                      <span />
-                    </div>
-                    <div className="um-site-hero">
-                      <div className="um-site-hero-text" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="use-card-text">
-                <h4>Website &amp; Apps</h4>
-                <p>Build trust before the first click.</p>
-              </div>
-            </div>
-            {/* Social */}
-            <div className="use-card">
-              <div className="use-mockup um-social">
-                <div className="um-social-inner">
-                  <span>SF</span>
-                </div>
-              </div>
-              <div className="use-card-text">
-                <h4>Social Media</h4>
-                <p>Stand out in every feed.</p>
-              </div>
-            </div>
-            {/* Biz Card */}
-            <div className="use-card">
-              <div className="use-mockup um-bizcard">
-                <div className="um-bizcard-inner">
-                  <div className="um-bc-logo">✦ Caroma</div>
-                  <div>
-                    <div className="um-bc-name">Jane Watkins</div>
-                    <div className="um-bc-detail">hello@caroma.com</div>
-                  </div>
-                </div>
-              </div>
-              <div className="use-card-text">
-                <h4>Business Cards</h4>
-                <p>Make a memorable first impression.</p>
-              </div>
-            </div>
-            {/* Packaging */}
-            <div className="use-card">
-              <div className="use-mockup um-packaging">
-                <div className="um-package-box">
-                  <div className="um-package-logo">Sandra Harvey</div>
-                  <div className="um-package-lines">
-                    <div className="um-package-line" style={{ width: 60 }} />
-                    <div className="um-package-line" style={{ width: 40 }} />
-                  </div>
-                </div>
-              </div>
-              <div className="use-card-text">
-                <h4>Packaging &amp; Products</h4>
-                <p>Turn every box into a brand moment.</p>
-              </div>
-            </div>
-            {/* Merch */}
-            <div className="use-card">
-              <div className="use-mockup um-merch">
-                <div className="um-tshirt">
-                  <div className="um-tshirt-logo">HEADLINES</div>
-                </div>
-              </div>
-              <div className="use-card-text">
-                <h4>Merch &amp; Swag</h4>
-                <p>Your brand, out in the world.</p>
-              </div>
-            </div>
-            {/* Invoice */}
-            <div className="use-card">
-              <div className="use-mockup um-invoice">
-                <div className="um-invoice-inner">
-                  <div className="um-inv-header">
-                    <div className="um-inv-logo">
-                      tappt<span>°</span>
-                    </div>
-                    <div className="um-inv-tag">Invoice</div>
-                  </div>
-                  <div className="um-inv-lines">
-                    <div className="um-inv-line" style={{ width: "100%" }} />
-                    <div className="um-inv-line" style={{ width: "80%" }} />
-                    <div className="um-inv-line" style={{ width: "90%" }} />
-                    <div className="um-inv-line" style={{ width: "40%" }} />
-                  </div>
-                </div>
-              </div>
-              <div className="use-card-text">
-                <h4>Invoices &amp; Proposals</h4>
-                <p>Look established on every document.</p>
-              </div>
-            </div>
-          </div>
-        </RevealSection>
-
-        {/* ── WHO IT'S FOR ── */}
-        <RevealSection className="who-section">
-          <div className="section-header">
-            <div className="section-tag">{WHO_ITS_FOR.tag}</div>
-            <h2>{WHO_ITS_FOR.headline}</h2>
-          </div>
-          <div className="who-grid">
-            {WHO_ITS_FOR.items.map((item, i) => (
-              <div className="who-card" key={i}>
-                <div className="who-icon">{icons[whoIcons[i]]}</div>
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
-        </RevealSection>
-
-        {/* ── WHY JOIN NOW ── */}
-        <RevealSection className="why-section">
-          <div className="section-header">
-            <div className="section-tag">{WHY_JOIN.tag}</div>
-            <h2>{WHY_JOIN.headline}</h2>
-          </div>
-          <div className="why-grid">
-            {WHY_JOIN.items.map((item, i) => (
-              <div className="why-card" key={i}>
-                <div className="why-icon">{icons[whyIcons[i]]}</div>
-                <div>
-                  <h4>{item.title}</h4>
-                  <p>{item.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="scarcity-banner">
-            <p>
-              {WHY_JOIN.scarcity.prefix}
-              <em>{WHY_JOIN.scarcity.count}</em>
-              {WHY_JOIN.scarcity.suffix}
-            </p>
-          </div>
-        </RevealSection>
-
-        {/* ── FAQ ── */}
-        <RevealSection>
-          <FAQSection />
-        </RevealSection>
-
-        {/* ── FINAL CTA ── */}
-        <RevealSection className="final-cta">
-          <div className="cta-card" id="signup">
-            <h2>
-              {FINAL_CTA.headline}
-              <br />
-              that{" "}
-              <span className="gradient-text">
-                {FINAL_CTA.headlineHighlight}
-              </span>
-            </h2>
-            <p>{FINAL_CTA.sub}</p>
             <SignupForm
-              id="ctaForm"
-              ctaText={FINAL_CTA.cta}
-              fudText={FINAL_CTA.fud}
+              id="hero-form"
+              formClassName="hero-form"
+              ctaText={HERO.cta}
+              microText={HERO.micro}
+              microClassName="hero-micro"
               onSuccess={handleSignupSuccess}
             />
-          </div>
-        </RevealSection>
-      </div>
 
-      {/* Footer */}
-      <footer>
-        <div className="footer-content">
-          <p className="footer-tagline">{FOOTER.tagline}</p>
-          <div className="footer-links">
-            {FOOTER.links.map((link) => (
-              <a href={link.toLowerCase()} key={link}>
-                {link}
-              </a>
-            ))}
-          </div>
-          <p className="footer-copy">{FOOTER.copy}</p>
-          <p className="footer-disclaimer">{FOOTER.disclaimer}</p>
+            <div className="hero-social-proof">
+              <div className="avatar-stack">
+                {SOCIAL_PROOF.avatars.map((url, i) => (
+                  <div
+                    key={i}
+                    className="avatar"
+                    style={{ backgroundImage: `url('${url}')` }}
+                  ></div>
+                ))}
+              </div>
+              <span>Join</span> <span className="count">{waitlistDisplay}</span>{" "}
+              <span>founders on the waitlist</span>
+            </div>
+
+            <div className="countdown-wrap">
+              <Countdown />
+            </div>
+          </section>
+
+          {/* ═══ LOGO SHOWCASE ═══ */}
+          <RevealSection>
+            <div className="container">
+              <div className="s-label s-label--center">{LOGO_GALLERY.tag}</div>
+              <h2 className="center">{LOGO_GALLERY.headline}</h2>
+              <p className="sub center">{LOGO_GALLERY.sub}</p>
+
+              <div className="logo-grid">
+                {LOGO_IMAGES.map((url, i) => (
+                  <div key={i} className="logo-card">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="" loading="lazy" />
+                  </div>
+                ))}
+              </div>
+              <p className="logo-footnote">{LOGO_GALLERY.footnote}</p>
+            </div>
+          </RevealSection>
+
+          {/* ═══ WHAT YOU GET ═══ */}
+          <RevealSection>
+            <div className="container--narrow">
+              <div className="s-label s-label--center">What You Get</div>
+              <h2 className="center">
+                Not just a logo &mdash; your complete brand kit
+              </h2>
+              <p className="sub center">
+                Everything you need for a professional brand, all in one place.
+              </p>
+            </div>
+
+            <div className="container">
+              <MockupCollage />
+              <p className="kit-caption">
+                One logo becomes <strong>an entire brand</strong> &mdash; merch,
+                cards, social, apps &amp; more
+              </p>
+            </div>
+
+            <div className="container">
+              <div className="kit-grid">
+                {KIT_ITEMS.map((item, i) => (
+                  <div key={i} className="kit-card">
+                    <div className="kit-icon">{item.icon}</div>
+                    <h3>{item.title}</h3>
+                    <p>{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </RevealSection>
+
+          {/* ═══ HOW IT WORKS ═══ */}
+          <RevealSection>
+            <div className="container--narrow">
+              <div className="s-label s-label--center">How It Works</div>
+              <h2 className="center">3 steps. 60 seconds. Done.</h2>
+              <p className="sub center">It&apos;s that simple.</p>
+
+              <div className="timeline">
+                {HOW_STEPS.map((step, i) => (
+                  <div key={i} className="tl-step">
+                    <div className="tl-left">
+                      <div className="tl-circle">{step.num}</div>
+                      {i < HOW_STEPS.length - 1 && (
+                        <div className="tl-line"></div>
+                      )}
+                    </div>
+                    <div className="tl-right">
+                      <h3>{step.title}</h3>
+                      <p>{step.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </RevealSection>
+
+          {/* ═══ USE IT EVERYWHERE ═══ */}
+          <RevealSection>
+            <div className="container">
+              <div className="s-label s-label--center">Use It Everywhere</div>
+              <h2 className="center">Your logo, wherever you need it</h2>
+              <p className="sub center">&nbsp;</p>
+
+              <div className="use-grid">
+                {USE_CASES.map((item, i) => (
+                  <div key={i} className="use-card">
+                    <div className="use-mock">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={item.img} alt="" loading="lazy" />
+                    </div>
+                    <h3>{item.title}</h3>
+                    <p>{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </RevealSection>
+
+          {/* ═══ WHO IT'S FOR ═══ */}
+          <RevealSection>
+            <div className="container">
+              <div className="s-label s-label--center">Who It&apos;s For</div>
+              <h2 className="center">Built for businesses like yours</h2>
+              <p className="sub center">&nbsp;</p>
+
+              <div className="audience-grid">
+                {AUDIENCE.map((item, i) => (
+                  <div key={i} className="audience-card">
+                    <div className="audience-icon">{item.icon}</div>
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </RevealSection>
+
+          {/* ═══ WHY JOIN NOW ═══ */}
+          <RevealSection>
+            <div className="container">
+              <div className="s-label s-label--center">Why Join Now</div>
+              <h2 className="center">Early access = best perks</h2>
+              <p className="sub center">&nbsp;</p>
+
+              <div className="perks">
+                {PERKS.map((item, i) => (
+                  <div key={i} className="perk-card">
+                    <div className="perk-icon">{item.icon}</div>
+                    <h3>{item.title}</h3>
+                    <p>{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="scarcity-note">
+                Only <strong>100,000 spots</strong> available. Then they&apos;re
+                gone.
+              </div>
+            </div>
+          </RevealSection>
+
+          {/* ═══ FAQ ═══ */}
+          <RevealSection>
+            <div className="container--narrow">
+              <div className="s-label s-label--center">FAQ</div>
+              <h2 className="center">Questions? Answers.</h2>
+              <p className="sub center">&nbsp;</p>
+
+              <FAQSection />
+            </div>
+          </RevealSection>
+
+          <hr className="dashed-divider" />
+
+          {/* ═══ FINAL CTA ═══ */}
+          <RevealSection className="final-cta" id="final-cta">
+            <div className="container--narrow" id="signup">
+              <h2>{FINAL_CTA.headline}</h2>
+              <p className="sub">{FINAL_CTA.sub}</p>
+
+              <SignupForm
+                id="final-form"
+                formClassName="final-cta-form"
+                ctaText={FINAL_CTA.cta}
+                microText={FINAL_CTA.micro}
+                microClassName="final-micro"
+                onSuccess={handleSignupSuccess}
+              />
+            </div>
+          </RevealSection>
         </div>
-      </footer>
+
+        {/* FOOTER */}
+        <footer>
+          <div className="footer-inner">
+            <div className="footer-tagline">{FOOTER.tagline}</div>
+            <div className="footer-links">
+              {FOOTER.links.map((link) => (
+                <a key={link.label} href={link.label.toLowerCase()}>
+                  {link.label}
+                </a>
+              ))}
+            </div>
+            <div className="footer-copy">{FOOTER.copy}</div>
+            <div className="footer-disclaimer">{FOOTER.disclaimer}</div>
+          </div>
+        </footer>
+      </div>
     </>
   );
 }
