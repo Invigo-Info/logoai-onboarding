@@ -1,10 +1,13 @@
 import { NextResponse, NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@supabase/supabase-js";
+import Replicate from "replicate";
 
 /* ═══════════════════════════════════════════
-   PROMPT BUILDER
+   CONSTANTS
    ═══════════════════════════════════════════ */
+
+const TEXT_MODEL = "anthropic/claude-opus-4.6" as const;
 
 const LOGO_TYPE_LABELS: Record<string, string> = {
   wordmark: "wordmark (text-only, stylized typography, no icons)",
@@ -17,77 +20,81 @@ const LOGO_TYPE_LABELS: Record<string, string> = {
   mascot: "mascot (friendly character or creature with brand name)",
 };
 
-const NAME_STYLE_LABELS: Record<string, string> = {
-  modern: "clean sans-serif, contemporary and minimal",
-  classic: "serif typeface, traditional and elegant",
-  playful: "rounded letterforms, friendly and approachable",
-  bold: "heavy weight, high-impact and commanding",
-};
+/* ═══════════════════════════════════════════
+   STEP 1: GENERATE N UNIQUE PROMPTS (Claude Opus 4.6)
+   ═══════════════════════════════════════════ */
 
-const VARIANT_MOODS = [
-  "clean, balanced, and professional",
-  "alternative layout, experimental composition",
-  "bold, impactful, strong visual weight",
-  "minimal, refined, lots of whitespace",
-];
-
-function buildFluxPrompt(
+async function generatePrompts(
+  replicate: Replicate,
   businessName: string,
+  description: string,
   tagline: string,
   colors: string[],
   impressionWords: string[],
-  logoType: string,
-  variantIndex: number,
-  description?: string,
-  businessNameStyle?: string,
-): string {
-  const typeLabel = LOGO_TYPE_LABELS[logoType] || LOGO_TYPE_LABELS.icon_text;
-  const mood = VARIANT_MOODS[variantIndex] || VARIANT_MOODS[0];
+  logoTypes: string[],
+  products: string[],
+  count: number,
+): Promise<string[]> {
   const c1 = colors[0] || "#4F46E5";
   const c2 = colors[1] || "#7C3AED";
   const c3 = colors[2] || "#1E293B";
   const personality = impressionWords.length ? impressionWords.join(", ") : "professional, modern";
-  const nameStyle = businessNameStyle ? (NAME_STYLE_LABELS[businessNameStyle] || "clean sans-serif") : "clean sans-serif";
 
-  // LogoForge AI prompt format: flowing prose, exhaustive color bullets,
-  // ALL CAPS for visual elements, white background hardcoded
-  const lines = [
-    `Design a ${mood.split(",")[0].trim()} ${typeLabel} logo for "${businessName}"${description ? ` in the ${description} industry` : ""}.`,
-  ];
+  const typeDescriptions = logoTypes.map((t, i) => {
+    const label = LOGO_TYPE_LABELS[t] || LOGO_TYPE_LABELS.combination_mark;
+    return `Prompt ${i + 1}: ${label}`;
+  }).join("\n");
 
-  // Logo type-specific icon description
-  if (logoType === "combination_mark" || logoType === "icon_text") {
-    lines.push(`Include an icon on the left — a meaningful symbol representing the brand's core identity. Brand name "${businessName}" on the right in a ${nameStyle} typeface.`);
-  } else if (logoType === "wordmark") {
-    lines.push(`Focus entirely on typography — custom letterforms with ${nameStyle} styling. The TYPE is the design — no separate icon.`);
-  } else if (logoType === "lettermark") {
-    const initials = businessName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
-    lines.push(`Feature the initials "${initials}" — focus on how letters interact, overlap, nest, or integrate in a ${nameStyle} style.`);
-  } else if (logoType === "emblem") {
-    lines.push(`Text integrated inside a circular badge shape. All elements sit INSIDE the shape. Brand name "${businessName}" curves along the shape in a ${nameStyle} typeface.`);
-  } else if (logoType === "brandmark") {
-    lines.push(`Standalone symbolic icon with NO text — must work without any brand name visible. A memorable shape that evokes the brand identity.`);
-  } else if (logoType === "abstract") {
-    lines.push(`Non-representational geometric form — unique, ownable, modern. Describe shapes, intersections, and negative space that evoke ${personality}. Brand name "${businessName}" alongside in ${nameStyle}.`);
-  } else if (logoType === "mascot") {
-    lines.push(`Character-based logo — friendly, approachable mascot that embodies ${personality}. Brand name "${businessName}" to the right in a ${nameStyle} typeface.`);
+  const systemPrompt = `You are LogoForge AI, an expert logo prompt engineer. You generate image generation prompts for creating professional brand logos. Each prompt must be unique, creative, and highly detailed — describing specific visual elements, shapes, composition, and styling. Output ONLY a JSON array of exactly ${count} strings. No markdown, no explanation, just the JSON array.`;
+
+  const userPrompt = `Generate ${count} unique, detailed image-generation prompts for logo designs for "${businessName}".
+
+BRAND DATA:
+- Business: ${description || "A professional business"}
+- Tagline: ${tagline || "none"}
+- Products/Services: ${products.length ? products.join(", ") : "general services"}
+- Brand personality: ${personality}
+COLORS (use these EXACT hex codes in every prompt):
+- Primary: ${c1} (dominant brand color — main icon, primary text)
+- Secondary: ${c2} (supporting color — accent shapes, tagline)
+- Accent: ${c3} (pop color — highlights, small details)
+- Background: White #FFFFFF (always)
+
+LOGO TYPES — assign each prompt one of these types:
+${typeDescriptions}
+
+PROMPT RULES:
+1. Each prompt must be 80-150 words of flowing, descriptive prose
+2. Describe SPECIFIC visual elements: exact shapes, icon concepts, typography choices, spatial layout
+3. Each prompt must feel completely different — different icon concepts, different compositions, different creative directions
+4. Include the brand name "${businessName}" and specify where it appears
+5. Reference ALL 3 brand colors by hex code + white background
+6. End each prompt with: "Flat design, no gradients, no 3D effects, no shadows, clean white background, vector-quality, sharp crisp edges."
+7. Make each prompt CREATIVE and UNIQUE — don't just swap adjectives, design genuinely different logo concepts
+8. For brandmark: NO text at all, standalone symbol only
+9. For wordmark: NO icon, typography IS the design
+10. For emblem: everything sits INSIDE a containing shape
+
+Return ONLY a JSON array of exactly ${count} prompt strings.`;
+
+  const output = await replicate.run(TEXT_MODEL, {
+    input: {
+      system_prompt: systemPrompt,
+      prompt: userPrompt,
+      max_tokens: count * 600,
+      temperature: 0.9,
+    },
+  });
+
+  const content = Array.isArray(output) ? output.join("") : String(output);
+  const cleaned = content.replace(/```json\n?|```\n?/g, "").trim();
+  const prompts = JSON.parse(cleaned);
+
+  if (!Array.isArray(prompts) || prompts.length < count) {
+    throw new Error(`Claude returned ${Array.isArray(prompts) ? prompts.length : 0} prompts, expected ${count}`);
   }
 
-  if (tagline) {
-    lines.push(`Tagline "${tagline}" in smaller text below the brand name.`);
-  }
-
-  // Exhaustive color bullets per PDF rules
-  lines.push("Colors:");
-  lines.push(`- Primary element: ${c1} (dominant brand color, main icon shape, primary text)`);
-  lines.push(`- Secondary element: ${c2} (supporting color, accent shapes, tagline text)`);
-  lines.push(`- Accent detail: ${c3} (pop color, highlights, small detail elements)`);
-  lines.push("- Background: White #FFFFFF");
-
-  lines.push(`Style: ${personality} — the design is ${mood}. A brand that communicates trust and quality at first glance.`);
-  lines.push("Output: Vector-quality horizontal logo on white background.");
-
-  return lines.join(" ");
+  return prompts.slice(0, count);
 }
 
 /* ═══════════════════════════════════════════
@@ -95,10 +102,12 @@ function buildFluxPrompt(
    ═══════════════════════════════════════════ */
 
 async function uploadToSupabaseStorage(
-  imageUrl: string,
+  imageBuffer: Uint8Array,
   userId: string,
   logoType: string,
   variantIndex: number,
+  contentType: string,
+  extension: string,
 ): Promise<string | null> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -112,23 +121,13 @@ async function uploadToSupabaseStorage(
     auth: { persistSession: false },
   });
 
-  // Download image from Replicate temp URL
-  const imgResponse = await fetch(imageUrl);
-  if (!imgResponse.ok) {
-    console.error(`AI Logo: Failed to download image from Replicate (${imgResponse.status})`);
-    return null;
-  }
-
-  const arrayBuffer = await imgResponse.arrayBuffer();
-  const buffer = new Uint8Array(arrayBuffer);
-
   const timestamp = Date.now();
-  const filePath = `${userId}/${logoType}-v${variantIndex}-${timestamp}.png`;
+  const filePath = `${userId}/${logoType}-v${variantIndex}-${timestamp}.${extension}`;
 
   const { error } = await supabase.storage
     .from("logos")
-    .upload(filePath, buffer, {
-      contentType: "image/png",
+    .upload(filePath, imageBuffer, {
+      contentType,
       upsert: false,
     });
 
@@ -145,198 +144,109 @@ async function uploadToSupabaseStorage(
 }
 
 /* ═══════════════════════════════════════════
-   REPLICATE (FLUX 2 PRO)
+   REPLICATE (GOOGLE NANO-BANANA)
    ═══════════════════════════════════════════ */
 
-async function generateWithReplicate(prompt: string): Promise<string | null> {
-  const replicateToken = process.env.REPLICATE_API_TOKEN;
-  if (!replicateToken) return null;
+async function generateWithNanoBanana(replicate: Replicate, prompt: string): Promise<string | null> {
+  try {
+    console.log("AI Logo [Nano-Banana]: Starting generation...");
 
-  const response = await fetch("https://api.replicate.com/v1/models/black-forest-labs/flux-2-pro/predictions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${replicateToken}`,
-      Prefer: "wait",
-    },
-    body: JSON.stringify({
+    const output = await replicate.run("google/nano-banana", {
       input: {
         prompt,
-        width: 1024,
-        height: 512,
-        num_outputs: 1,
+        aspect_ratio: "1:1",
         output_format: "png",
       },
-    }),
-  });
+    });
 
-  if (!response.ok) {
-    const errBody = await response.text().catch(() => "");
-    console.error(`AI Logo [Replicate]: API responded with ${response.status}`, errBody);
+    if (!output) {
+      console.error("AI Logo [Nano-Banana]: Output is null/undefined");
+      return null;
+    }
+
+    // FileOutput.toString() returns the URL href string
+    let imageUrl: string | null = null;
+
+    if (output && typeof (output as any).toString === "function" && String(output).startsWith("http")) {
+      imageUrl = String(output);
+    } else if (Array.isArray(output) && output.length > 0) {
+      const first = output[0];
+      if (typeof first === "string") {
+        imageUrl = first;
+      } else if (first && String(first).startsWith("http")) {
+        imageUrl = String(first);
+      }
+    } else if (typeof output === "string") {
+      imageUrl = output;
+    }
+
+    if (!imageUrl) {
+      console.error("AI Logo [Nano-Banana]: Could not extract image URL from output");
+      return null;
+    }
+
+    return imageUrl;
+  } catch (err) {
+    console.error("AI Logo [Nano-Banana]: Error:", err);
     return null;
   }
-
-  let prediction = await response.json() as {
-    id: string;
-    status: string;
-    output: string | string[] | null;
-    urls?: { get: string };
-  };
-
-  // Polling safety net: if Prefer: wait returned before completion
-  if (prediction.status !== "succeeded" && prediction.status !== "failed") {
-    const pollUrl = prediction.urls?.get || `https://api.replicate.com/v1/predictions/${prediction.id}`;
-    for (let attempt = 0; attempt < 10; attempt++) {
-      await new Promise((r) => setTimeout(r, 3000));
-
-      const pollRes = await fetch(pollUrl, {
-        headers: { Authorization: `Bearer ${replicateToken}` },
-      });
-
-      if (!pollRes.ok) {
-        console.error(`AI Logo [Replicate]: Polling failed (${pollRes.status})`);
-        return null;
-      }
-
-      prediction = await pollRes.json();
-      if (prediction.status === "succeeded" || prediction.status === "failed") break;
-    }
-  }
-
-  if (prediction.status !== "succeeded" || !prediction.output) return null;
-
-  const url = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
-  return url || null;
 }
 
 /* ═══════════════════════════════════════════
-   CLAUDE SVG FALLBACK (ANTHROPIC API)
+   IMAGE → SVG CONVERTER
    ═══════════════════════════════════════════ */
 
-function extractAndValidateSVG(raw: string): string | null {
-  let cleaned = raw.replace(/```(?:svg|xml|html)?\n?/g, "").replace(/```\n?/g, "").trim();
-  const svgMatch = cleaned.match(/<svg[\s\S]*?<\/svg>/i);
-  if (!svgMatch) return null;
+async function convertImageToSvg(imageUrl: string): Promise<{ svgString: string; pngBuffer: Uint8Array } | null> {
+  try {
+    const imgResponse = await fetch(imageUrl);
+    if (!imgResponse.ok) {
+      console.error(`AI Logo: Failed to download image (${imgResponse.status})`);
+      return null;
+    }
 
-  let svg = svgMatch[0];
+    const arrayBuffer = await imgResponse.arrayBuffer();
+    const pngBuffer = new Uint8Array(arrayBuffer);
 
-  // Security: remove dangerous elements and attributes
-  svg = svg.replace(/<script[\s\S]*?<\/script>/gi, "");
-  svg = svg.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, "");
-  svg = svg.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, "");
-  svg = svg.replace(/<style[\s\S]*?<\/style>/gi, "");
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    const dataUri = `data:image/png;base64,${base64}`;
 
-  if (!/xmlns\s*=/.test(svg)) {
-    svg = svg.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
-  }
-  if (!/viewBox\s*=/.test(svg)) {
-    svg = svg.replace("<svg", '<svg viewBox="0 0 400 200"');
-  }
-  if (!svg.startsWith("<svg") || !svg.endsWith("</svg>")) return null;
-  if (svg.length > 5000) return null;
+    const svgString = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="white" rx="16"/>
+  <image href="${dataUri}" x="0" y="0" width="1024" height="1024" preserveAspectRatio="xMidYMid meet"/>
+</svg>`;
 
-  return svg;
-}
-
-async function generateWithClaude(
-  businessName: string,
-  tagline: string,
-  colors: string[],
-  impressionWords: string[],
-  logoType: string,
-  variantIndex: number,
-  businessNameStyle?: string,
-): Promise<string | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
-
-  const typeLabel = LOGO_TYPE_LABELS[logoType] || LOGO_TYPE_LABELS.icon_text;
-  const mood = VARIANT_MOODS[variantIndex] || VARIANT_MOODS[0];
-  const colorStr = colors.length ? colors.join(", ") : "#4F46E5, #7C3AED";
-  const personality = impressionWords.length ? impressionWords.join(", ") : "professional, modern";
-
-  const nameStyleHint = businessNameStyle
-    ? `Name styling: ${NAME_STYLE_LABELS[businessNameStyle] || "clean sans-serif"}. Use appropriate font-family and font-weight to reflect this style.`
-    : "";
-
-  const c1 = colors[0] || "#4F46E5";
-  const c2 = colors[1] || "#7C3AED";
-  const c3 = colors[2] || "#1E293B";
-
-  const systemPrompt = `You are LogoForge AI, an expert logo designer that outputs ONLY valid SVG code. No markdown, no explanation, no commentary — just the raw SVG.
-
-Rules:
-- Output a single <svg> element with viewBox="0 0 400 200"
-- Include a white rounded-rectangle background: <rect width="400" height="200" fill="white" rx="16"/>
-- Use ONLY these safe SVG elements: svg, rect, circle, ellipse, line, polyline, polygon, path, text, tspan, g, defs, linearGradient, radialGradient, stop, clipPath, mask, use, symbol
-- Do NOT use: <script>, <style>, <foreignObject>, <image>, <animate>, or any on* event attributes
-- Use web-safe fonts only: 'Segoe UI', 'Georgia', 'Trebuchet MS', Arial, Helvetica, sans-serif, serif
-- Keep total SVG under 3000 characters
-- All text must use the text element with appropriate font-family, font-size, font-weight attributes
-- ONLY 4 colors exist: the 3 brand colors provided + White #FFFFFF for background/negative space. No other colors.
-- No opacity values — use descriptive fills only, solid colors
-- Make the logo creative, unique, and professional
-- For brandmark type: create a standalone symbol with NO text at all
-- For combination_mark/icon_text type: icon on the left, text on the right — they should work independently
-- For emblem type: all elements sit INSIDE a containing shape (circle, shield, badge)
-- For wordmark type: focus entirely on typography, the TYPE is the design
-${nameStyleHint}`;
-
-  const userPrompt = `Design a ${mood.split(",")[0].trim()} ${typeLabel} logo for "${businessName}"${tagline ? ` with tagline "${tagline}"` : ""}.
-Colors:
-- Primary element: ${c1} (dominant brand color, main icon shape, primary text)
-- Secondary element: ${c2} (supporting color, accent shapes, tagline text)
-- Accent detail: ${c3} (pop color, highlights, small detail elements)
-- Background: White #FFFFFF
-Brand personality: ${personality}. This variant is ${mood}.
-Output ONLY the SVG code, nothing else.`;
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 4000,
-      temperature: 0.9,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    }),
-  });
-
-  if (!response.ok) {
-    const errBody = await response.text().catch(() => "");
-    console.error(`AI Logo [Claude]: API responded with ${response.status}`, errBody);
+    return { svgString, pngBuffer };
+  } catch (err) {
+    console.error("AI Logo: Image to SVG conversion failed:", err);
     return null;
   }
-
-  const data = await response.json() as {
-    content: { type: string; text: string }[];
-  };
-
-  const text = data.content?.find((c) => c.type === "text")?.text;
-  if (!text) return null;
-
-  return extractAndValidateSVG(text);
 }
 
 /* ═══════════════════════════════════════════
    POST HANDLER
+   Mode 1 (promptsOnly): Generate N prompts only
+   Mode 2 (default): Generate images from prompts
    ═══════════════════════════════════════════ */
 
 interface AILogoPayload {
   businessName?: string;
-  businessNameStyle?: string;
   tagline?: string;
   colors?: string[];
   impressionWords?: string[];
-  logoType?: string;
-  variantIndex?: number;
+  logoTypes?: string[];
   description?: string;
   products?: string[];
+  promptCount?: number;
+  promptsOnly?: boolean;
+  existingPrompts?: string[];
+}
+
+interface LogoResult {
+  type: string;
+  svg: string | null;
+  imageUrl: string | null;
+  prompt: string;
+  fallback: boolean;
 }
 
 export async function POST(request: NextRequest) {
@@ -361,55 +271,120 @@ export async function POST(request: NextRequest) {
 
   const {
     businessName = "Brand",
-    businessNameStyle = "",
     tagline = "",
     colors = ["#4F46E5", "#7C3AED"],
     impressionWords = [],
-    logoType = "icon_text",
-    variantIndex = 0,
+    logoTypes = ["combination_mark", "wordmark", "lettermark", "emblem", "abstract"],
     description = "",
+    products = [],
+    promptCount = 5,
+    promptsOnly = false,
+    existingPrompts,
   } = payload;
 
-  const prompt = buildFluxPrompt(businessName, tagline, colors, impressionWords, logoType, variantIndex, description, businessNameStyle);
+  const replicateToken = process.env.REPLICATE_API_TOKEN;
+  if (!replicateToken) {
+    return NextResponse.json(
+      { error: "REPLICATE_API_TOKEN not configured." },
+      { status: 500 },
+    );
+  }
+
+  const replicate = new Replicate({ auth: replicateToken });
 
   try {
-    // Layer 1: Try Replicate (Flux 2 Pro) — returns image URL
-    const tempImageUrl = await generateWithReplicate(prompt).catch((err) => {
-      console.error("AI Logo [Replicate]: Unexpected error:", err);
-      return null;
-    });
+    // ── MODE 1: Prompts only (no image generation) ──
+    if (promptsOnly) {
+      const count = Math.min(Math.max(promptCount, 1), 20);
+      console.log(`AI Logo: Generating ${count} prompts via Claude Opus 4.6...`);
+      const prompts = await generatePrompts(
+        replicate, businessName, description, tagline, colors,
+        impressionWords, logoTypes, products, count,
+      );
+      console.log(`AI Logo: ${prompts.length} prompts generated successfully`);
 
-    if (tempImageUrl) {
-      // Upload to Supabase Storage for permanent URL
-      const permanentUrl = await uploadToSupabaseStorage(tempImageUrl, userId, logoType, variantIndex);
-
-      if (permanentUrl) {
-        return NextResponse.json({ svg: null, imageUrl: permanentUrl, logoType, fallback: false });
-      }
-
-      // Storage failed — return temp URL (expires in ~1 hour)
-      console.error("AI Logo: Storage upload failed, returning temp URL");
-      return NextResponse.json({ svg: null, imageUrl: tempImageUrl, logoType, fallback: false });
+      return NextResponse.json({
+        prompts: prompts.map((prompt, i) => ({
+          type: logoTypes[i] || "combination_mark",
+          prompt,
+        })),
+      });
     }
 
-    // Layer 2: Fall back to Claude (Anthropic) — returns SVG code
-    console.log("AI Logo: Replicate failed, trying Claude SVG fallback");
-    const claudeSvg = await generateWithClaude(
-      businessName, tagline, colors, impressionWords, logoType, variantIndex, businessNameStyle,
-    ).catch((err) => {
-      console.error("AI Logo [Claude]: Unexpected error:", err);
-      return null;
-    });
-
-    if (claudeSvg) {
-      return NextResponse.json({ svg: claudeSvg, imageUrl: null, logoType, fallback: false });
+    // ── MODE 2: Generate images (use existing prompts or generate new ones) ──
+    let prompts: string[];
+    if (existingPrompts && existingPrompts.length > 0) {
+      prompts = existingPrompts;
+      console.log(`AI Logo: Using ${prompts.length} existing prompts for image generation`);
+    } else {
+      const count = Math.min(Math.max(logoTypes.length, 1), 20);
+      console.log(`AI Logo: Generating ${count} prompts via Claude Opus 4.6...`);
+      prompts = await generatePrompts(
+        replicate, businessName, description, tagline, colors,
+        impressionWords, logoTypes, products, count,
+      );
+      console.log(`AI Logo: ${prompts.length} prompts generated successfully`);
     }
 
-    // Layer 3: Both failed — return SVG template fallback signal
-    console.error("AI Logo: Both Replicate and Claude failed");
-    return NextResponse.json({ svg: null, imageUrl: null, logoType, fallback: true });
+    console.log(`AI Logo: Starting ${prompts.length} parallel Nano-Banana generations...`);
+    const results: LogoResult[] = await Promise.all(
+      prompts.map(async (prompt, i) => {
+        const type = logoTypes[i] || "combination_mark";
+
+        try {
+          const tempImageUrl = await generateWithNanoBanana(replicate, prompt);
+
+          if (tempImageUrl) {
+            const converted = await convertImageToSvg(tempImageUrl);
+
+            if (converted) {
+              const permanentPngUrl = await uploadToSupabaseStorage(
+                converted.pngBuffer, userId, type, i, "image/png", "png",
+              );
+
+              const svgBuffer = new TextEncoder().encode(converted.svgString);
+              const permanentSvgUrl = await uploadToSupabaseStorage(
+                svgBuffer, userId, type, i, "image/svg+xml", "svg",
+              );
+
+              return {
+                type,
+                svg: converted.svgString,
+                imageUrl: permanentPngUrl || permanentSvgUrl || null,
+                prompt,
+                fallback: false,
+              };
+            }
+          }
+        } catch (err) {
+          console.error(`AI Logo: Variant ${i} (${type}) failed:`, err);
+        }
+
+        // Fallback for this variant
+        return { type, svg: null, imageUrl: null, prompt, fallback: true };
+      }),
+    );
+
+    console.log(`AI Logo: All ${results.length} variants complete`);
+    return NextResponse.json({ logos: results });
   } catch (error) {
-    console.error("AI Logo: Unexpected error:", error);
-    return NextResponse.json({ svg: null, imageUrl: null, logoType, fallback: true });
+    console.error("AI Logo: Generation failed:", error);
+
+    if (promptsOnly) {
+      return NextResponse.json(
+        { error: "Failed to generate prompts. Please try again." },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      logos: logoTypes.map((type) => ({
+        type,
+        svg: null,
+        imageUrl: null,
+        prompt: "",
+        fallback: true,
+      })),
+    });
   }
 }

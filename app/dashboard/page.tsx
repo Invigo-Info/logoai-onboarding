@@ -173,7 +173,7 @@ export default function DashboardPage() {
                   <div className="db-logo-meta">
                     <div className="db-logo-name">{logo.business_name}</div>
                     <div className="db-logo-type">
-                      {logo.logo_type.replace("_", " + ")}
+                      {logo.logo_type.replace(/_v\d+$/, "").replace(/_/g, " ")}
                     </div>
                   </div>
                   <div className="db-logo-actions">

@@ -27,7 +27,6 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 interface FormData {
   businessName: string;
-  businessNameStyle: string;
   description: string;
   products: string[];
   tagline: string;
@@ -42,17 +41,30 @@ interface ColorOption {
   hex: string;
 }
 
-interface LogoType {
+interface LogoTypeInfo {
   id: string;
   label: string;
   desc: string;
   icon: string;
 }
 
+interface AILogoTypeData {
+  id: string;
+  label: string;
+  percent: number;
+  description: string;
+}
+
 interface LogoVariant {
   type: string;
   svg: string;
   imageUrl?: string;
+  prompt?: string;
+}
+
+interface GeneratedPrompt {
+  type: string;
+  prompt: string;
 }
 
 interface LogoConfig {
@@ -73,11 +85,6 @@ interface AISuggestionDropdownProps {
 interface StepProgressProps {
   current: number;
   total: number;
-}
-
-interface LogoPreviewProps {
-  form: FormData;
-  generateSvg: (config: LogoConfig) => string;
 }
 
 /* ═══════════════════════════════════════════
@@ -127,22 +134,14 @@ const COLOR_PALETTE: ColorOption[] = [
   { name: "Peach", hex: "#FBBF24" },
 ];
 
-const LOGO_TYPES: LogoType[] = [
-  { id: "wordmark", label: "Wordmark", desc: "Text-only logo with stylized typography", icon: "Aa" },
-  { id: "lettermark", label: "Lettermark", desc: "Initials or monogram design", icon: "AB" },
-  { id: "icon_text", label: "Icon + Text", desc: "Symbol paired with your brand name", icon: "\u25C6T" },
-  { id: "combination_mark", label: "Combination", desc: "Icon and text that can work separately", icon: "\u25C6|Aa" },
+const LOGO_TYPES: LogoTypeInfo[] = [
+  { id: "combination_mark", label: "Combination Mark", desc: "Icon paired with brand name", icon: "\u25C6|Aa" },
+  { id: "wordmark", label: "Wordmark", desc: "Brand name only, styled typography", icon: "Aa" },
+  { id: "lettermark", label: "Lettermark", desc: "Initials or monogram", icon: "AB" },
   { id: "brandmark", label: "Brandmark", desc: "Standalone symbol without text", icon: "\u25C8" },
-  { id: "emblem", label: "Emblem", desc: "Text inside a symbol or badge", icon: "\u2B21" },
+  { id: "emblem", label: "Emblem", desc: "Text inside a badge or seal", icon: "\u2B21" },
   { id: "abstract", label: "Abstract Mark", desc: "Geometric or abstract symbol", icon: "\u25C7" },
   { id: "mascot", label: "Mascot", desc: "Character-based illustrated logo", icon: "\u263A" },
-];
-
-const NAME_STYLES = [
-  { id: "modern", label: "Modern", desc: "Clean sans-serif", preview: "Aa" },
-  { id: "classic", label: "Classic", desc: "Serif, traditional", preview: "Aa" },
-  { id: "playful", label: "Playful", desc: "Rounded, friendly", preview: "Aa" },
-  { id: "bold", label: "Bold", desc: "Heavy weight, impact", preview: "Aa" },
 ];
 
 interface AIPaletteData {
@@ -160,6 +159,7 @@ const STEP_CONFIG = [
   { tag: "Step 5 of 7", title: "Define your brand personality" },
   { tag: "Step 6 of 7", title: "Choose your brand palette" },
   { tag: "Step 7 of 7", title: "Choose your logo style" },
+  { tag: "Review", title: "Your Brand Brief" },
 ];
 
 const FOOTER = {
@@ -172,6 +172,11 @@ const FOOTER = {
 /* ═══════════════════════════════════════════
    UTILITIES
    ═══════════════════════════════════════════ */
+
+function getColorName(hex: string): string {
+  const match = COLOR_PALETTE.find((c) => c.hex.toLowerCase() === hex.toLowerCase());
+  return match ? match.name : hex;
+}
 
 function escapeHtml(str: string): string {
   return str
@@ -188,7 +193,7 @@ function escapeHtml(str: string): string {
 
 const generateAISuggestions = async (
   context: { businessName: string; description: string; products: string[]; impressionWords?: string[] },
-  field: "description" | "tagline" | "products" | "impressionWords" | "colorPalettes",
+  field: "description" | "tagline" | "products" | "impressionWords" | "colorPalettes" | "logoTypes",
 ): Promise<string[]> => {
   const res = await fetch("/api/ai-suggest", {
     method: "POST",
@@ -223,82 +228,118 @@ const fetchColorPalettes = async (
   }
 };
 
+const fetchAILogoTypes = async (
+  context: { businessName: string; description: string; products: string[]; impressionWords?: string[] },
+): Promise<AILogoTypeData[]> => {
+  try {
+    const res = await fetch("/api/ai-suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ field: "logoTypes", context }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return data.suggestions || [];
+  } catch {
+    return [
+      { id: "combination_mark", label: "Combination Mark", percent: 35, description: "Icon paired with brand name — the most versatile and widely adaptable logo format." },
+      { id: "wordmark", label: "Wordmark", percent: 25, description: "Brand name only with styled typography — clean and strong for name recognition." },
+      { id: "emblem", label: "Emblem", percent: 15, description: "Text inside a badge, seal, or crest — traditional and bold for established brands." },
+      { id: "lettermark", label: "Lettermark", percent: 10, description: "Initials or monogram — professional and compact for long business names." },
+      { id: "brandmark", label: "Brandmark", percent: 7, description: "Standalone symbol without text — requires strong brand recognition." },
+      { id: "abstract", label: "Abstract Mark", percent: 5, description: "Geometric or abstract symbol — modern and unique for differentiation." },
+      { id: "mascot", label: "Mascot", percent: 3, description: "Character-based illustrated logo — friendly and memorable for approachable brands." },
+    ];
+  }
+};
+
 /* ═══════════════════════════════════════════
-   AI LOGO GENERATION
+   AI PROMPT GENERATION (Step 1)
+   Claude Opus 4.6 generates N unique prompts
    ═══════════════════════════════════════════ */
 
-const generateAILogos = async (
+const fetchAIPrompts = async (
   form: FormData,
   logoTypes: string[],
+  count: number,
+): Promise<GeneratedPrompt[]> => {
+  const res = await fetch("/api/ai-logo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      businessName: form.businessName,
+      tagline: form.tagline,
+      colors: form.colors,
+      impressionWords: form.impressionWords,
+      logoTypes,
+      description: form.description,
+      products: form.products,
+      promptCount: count,
+      promptsOnly: true,
+    }),
+  });
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json() as { prompts: { type: string; prompt: string }[] };
+  return data.prompts;
+};
+
+/* ═══════════════════════════════════════════
+   AI IMAGE GENERATION (Step 2)
+   Nano-Banana generates images from prompts
+   ═══════════════════════════════════════════ */
+
+const generateAILogosFromPrompts = async (
+  form: FormData,
+  prompts: GeneratedPrompt[],
 ): Promise<LogoVariant[]> => {
-  const AI_TIMEOUT_MS = 45000;
-
-  const fetchWithFallback = async (
-    type: string,
-    variantIndex: number,
-  ): Promise<LogoVariant> => {
-    try {
-      const res = await fetch("/api/ai-logo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          businessName: form.businessName,
-          businessNameStyle: form.businessNameStyle,
-          tagline: form.tagline,
-          colors: form.colors,
-          impressionWords: form.impressionWords,
-          logoType: type,
-          variantIndex,
-          description: form.description,
-          products: form.products,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      const data = await res.json() as {
-        svg: string | null;
-        imageUrl: string | null;
-        logoType: string;
-        fallback: boolean;
-      };
-
-      // Prefer imageUrl from Flux 2 Pro, fall back to SVG from API
-      if (data.imageUrl) {
-        return { type, svg: generateLogoSVG({ ...form, logoType: type }), imageUrl: data.imageUrl };
-      }
-
-      if (data.svg) {
-        return { type, svg: data.svg };
-      }
-    } catch (err) {
-      console.error(`AI logo failed for variant ${variantIndex} (${type}):`, err);
-    }
-
-    // Fallback to template
-    return {
-      type,
-      svg: generateLogoSVG({ ...form, logoType: type }),
-    };
-  };
+  const AI_TIMEOUT_MS = 180000;
 
   try {
-    const results = await Promise.race([
-      Promise.all(
-        logoTypes.map((type, i) => fetchWithFallback(type, i)),
-      ),
+    const result = await Promise.race([
+      (async () => {
+        const res = await fetch("/api/ai-logo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            businessName: form.businessName,
+            tagline: form.tagline,
+            colors: form.colors,
+            impressionWords: form.impressionWords,
+            logoTypes: prompts.map((p) => p.type),
+            description: form.description,
+            products: form.products,
+            existingPrompts: prompts.map((p) => p.prompt),
+          }),
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json() as {
+          logos: { type: string; svg: string | null; imageUrl: string | null; prompt: string; fallback: boolean }[];
+        };
+
+        return data.logos.map((logo) => {
+          if (logo.imageUrl) {
+            return { type: logo.type, svg: generateLogoSVG({ ...form, logoType: logo.type }), imageUrl: logo.imageUrl, prompt: logo.prompt };
+          }
+          if (logo.svg) {
+            return { type: logo.type, svg: logo.svg, prompt: logo.prompt };
+          }
+          return { type: logo.type, svg: generateLogoSVG({ ...form, logoType: logo.type }), prompt: logo.prompt };
+        });
+      })(),
       new Promise<LogoVariant[]>((_, reject) =>
         setTimeout(() => reject(new Error("AI logo timeout")), AI_TIMEOUT_MS),
       ),
     ]);
-    return results;
+    return result;
   } catch (err) {
-    console.error("AI logo generation timed out, using all templates:", err);
-    return logoTypes.map((type) => ({
-      type,
-      svg: generateLogoSVG({ ...form, logoType: type }),
+    console.error("AI logo generation failed, using templates:", err);
+    return prompts.map((p) => ({
+      type: p.type,
+      svg: generateLogoSVG({ ...form, logoType: p.type }),
+      prompt: p.prompt,
     }));
   }
 };
@@ -493,66 +534,43 @@ function AISuggestionDropdown({
   );
 }
 
-function LogoPreview({ form, generateSvg }: LogoPreviewProps) {
-  const [open, setOpen] = useState(false);
-
-  if (!form.businessName) return null;
-
-  const svgStr = generateSvg({
-    businessName: form.businessName,
-    colors: form.colors.length ? form.colors : ["#7C3AED", "#A855F7", "#1E293B"],
-    logoType: form.logoType,
-    impressionWords: form.impressionWords,
-    tagline: form.tagline,
-  });
-
+function InlineSuggestions({
+  suggestions,
+  loading,
+  onSelect,
+  label,
+  variant = "chips",
+}: {
+  suggestions: string[];
+  loading: boolean;
+  onSelect: (s: string) => void;
+  label: string;
+  variant?: "chips" | "rows";
+}) {
   return (
-    <div className="ob-preview-section">
-      <button
-        className="ob-preview-toggle"
-        onClick={() => setOpen(!open)}
-      >
-        Live Preview
-        <span className={`ob-preview-toggle-arrow ${open ? "open" : ""}`}>
-          {"\u25BC"}
-        </span>
-      </button>
-      <div className={`ob-preview-card ${open ? "open" : ""}`}>
-        <div
-          className="ob-preview-svg-wrap"
-          dangerouslySetInnerHTML={{ __html: svgStr }}
-        />
-        <div className="ob-preview-details">
-          {form.businessName && (
-            <div>
-              <span>Name: </span>
-              <strong>{form.businessName}</strong>
-            </div>
-          )}
-          {form.products.length > 0 && (
-            <div>
-              <span>Focus: </span>{form.products.join(", ")}
-            </div>
-          )}
-          {form.impressionWords.length > 0 && (
-            <div>
-              <span>Vibe: </span>{form.impressionWords.join(", ")}
-            </div>
-          )}
-          {form.colors.length > 0 && (
-            <div className="ob-preview-color-dots">
-              <span>Colors: </span>
-              {form.colors.map((c, i) => (
-                <span
-                  key={i}
-                  className="ob-preview-color-dot"
-                  style={{ background: c }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+    <div className="ob-inline-suggestions">
+      <div className="ob-inline-suggestions-header">
+        <span>{label}</span>
+        <span className="ob-ai-tag">AI</span>
       </div>
+      {loading ? (
+        <div className="ob-inline-suggestions-loading">
+          <div className="ob-ai-dropdown-spinner" />
+          <p>Generating suggestions&hellip;</p>
+        </div>
+      ) : (
+        <div className={`ob-inline-suggestions-list ${variant === "rows" ? "rows" : ""}`}>
+          {suggestions.map((s, i) => (
+            <button
+              key={i}
+              className={`ob-inline-suggestion-item ${variant === "rows" ? "row" : "chip"}`}
+              onClick={() => onSelect(s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -562,7 +580,7 @@ function LogoPreview({ form, generateSvg }: LogoPreviewProps) {
    ═══════════════════════════════════════════ */
 
 export default function OnboardingPage() {
-  const [view, setView] = useState<"onboarding" | "generating" | "dashboard">("onboarding");
+  const [view, setView] = useState<"onboarding" | "generating-prompts" | "prompts" | "generating-images" | "dashboard">("onboarding");
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -575,13 +593,12 @@ export default function OnboardingPage() {
 
   const [form, setForm] = useState<FormData>({
     businessName: "",
-    businessNameStyle: "",
     description: "",
     products: [],
     tagline: "",
     impressionWords: [],
     colors: [],
-    logoType: "icon_text",
+    logoType: "combination_mark",
     selectedPaletteIndex: -1,
   });
 
@@ -589,11 +606,32 @@ export default function OnboardingPage() {
   const [palettesLoading, setPalettesLoading] = useState(false);
   const [manualColorOpen, setManualColorOpen] = useState(false);
 
+  const [aiLogoTypes, setAiLogoTypes] = useState<AILogoTypeData[]>([]);
+  const [logoTypesLoading, setLogoTypesLoading] = useState(false);
+  const [logoTypesFetched, setLogoTypesFetched] = useState(false);
+
   const [customProduct, setCustomProduct] = useState("");
   const [customImpression, setCustomImpression] = useState("");
+  const [promptCount, setPromptCount] = useState(10);
+  const [generatedPrompts, setGeneratedPrompts] = useState<GeneratedPrompt[]>([]);
+  const [savedProfileId, setSavedProfileId] = useState<number | null>(null);
+
+  // Inline auto-fetch suggestion state
+  const [inlineDescSuggestions, setInlineDescSuggestions] = useState<string[]>([]);
+  const [inlineDescLoading, setInlineDescLoading] = useState(false);
+  const [inlineDescFetched, setInlineDescFetched] = useState(false);
+  const [inlineProdSuggestions, setInlineProdSuggestions] = useState<string[]>([]);
+  const [inlineProdLoading, setInlineProdLoading] = useState(false);
+  const [inlineProdFetched, setInlineProdFetched] = useState(false);
+  const [inlineTaglineSuggestions, setInlineTaglineSuggestions] = useState<string[]>([]);
+  const [inlineTaglineLoading, setInlineTaglineLoading] = useState(false);
+  const [inlineTaglineFetched, setInlineTaglineFetched] = useState(false);
+  const [aiImpressionWords, setAiImpressionWords] = useState<string[]>([]);
+  const [impressionWordsLoading, setImpressionWordsLoading] = useState(false);
+  const [impressionWordsFetched, setImpressionWordsFetched] = useState(false);
 
   const brandName = form.businessName || "Your Brand";
-  const TOTAL_STEPS = 7;
+  const TOTAL_STEPS = 8;
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -625,6 +663,10 @@ export default function OnboardingPage() {
     try {
       const results = await generateAISuggestions(form, field);
       setAiSuggestions(results);
+      // Sync to inline state
+      if (field === "description") { setInlineDescSuggestions(results); setInlineDescFetched(true); }
+      if (field === "products") { setInlineProdSuggestions(results); setInlineProdFetched(true); }
+      if (field === "tagline") { setInlineTaglineSuggestions(results); setInlineTaglineFetched(true); }
     } catch {
       setAiSuggestions(["Unable to generate suggestions. Please type manually."]);
     }
@@ -638,7 +680,6 @@ export default function OnboardingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           businessName: formData.businessName,
-          businessNameStyle: formData.businessNameStyle,
           description: formData.description,
           products: formData.products,
           tagline: formData.tagline,
@@ -665,46 +706,75 @@ export default function OnboardingPage() {
     }
   }, []);
 
+  // Phase 1: Generate prompts only
   const handleFinish = async () => {
-    setView("generating");
+    setView("generating-prompts");
     setSaveError(null);
 
     // Save onboarding data to Supabase
     const profileId = await saveOnboardingProfile(form);
 
     if (profileId === null) {
-      // Return to onboarding so user can retry
       setView("onboarding");
       return;
     }
+    setSavedProfileId(profileId);
 
-    const types = [form.logoType, "wordmark", "lettermark", "emblem", "abstract", "icon_text", "combination_mark", "brandmark"];
-    const uniqueTypes = Array.from(new Set(types)).slice(0, 4);
-    const variants: LogoVariant[] = await generateAILogos(form, uniqueTypes);
+    const allTypes = [form.logoType, "combination_mark", "wordmark", "lettermark", "emblem", "abstract", "brandmark", "mascot"];
+    const uniqueTypes = Array.from(new Set(allTypes));
+    const logoTypesForPrompts: string[] = [];
+    for (let i = 0; i < promptCount; i++) {
+      logoTypesForPrompts.push(uniqueTypes[i % uniqueTypes.length]);
+    }
+
+    try {
+      const prompts = await fetchAIPrompts(form, logoTypesForPrompts, promptCount);
+      setGeneratedPrompts(prompts);
+      setView("prompts");
+    } catch (err) {
+      console.error("Prompt generation failed:", err);
+      setSaveError("Failed to generate prompts. Please try again.");
+      setView("onboarding");
+    }
+  };
+
+  // Phase 2: Generate images from the prompts
+  const handleGenerateImages = async () => {
+    setView("generating-images");
+
+    const variants: LogoVariant[] = await generateAILogosFromPrompts(form, generatedPrompts);
     setLogoVariants(variants);
     setSelectedVariant(0);
     setView("dashboard");
 
-    // Save logos to database (non-blocking)
-    fetch("/api/logos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        profileId,
-        businessName: form.businessName,
-        tagline: form.tagline,
-        colors: form.colors,
-        impressionWords: form.impressionWords,
-        logos: variants.map((v, i) => ({
-          type: v.type,
-          svg: v.svg,
-          imageUrl: v.imageUrl || null,
-          isSelected: i === 0,
-        })),
-      }),
-    }).catch((err) => {
-      console.error("Logo save failed (non-blocking):", err);
-    });
+    // Save logos to database
+    if (savedProfileId) {
+      try {
+        const saveRes = await fetch("/api/logos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            profileId: savedProfileId,
+            businessName: form.businessName,
+            tagline: form.tagline,
+            colors: form.colors,
+            impressionWords: form.impressionWords,
+            logos: variants.map((v, i) => ({
+              type: v.type,
+              svg: v.svg,
+              imageUrl: v.imageUrl || null,
+              isSelected: i === 0,
+            })),
+          }),
+        });
+        if (!saveRes.ok) {
+          const body = await saveRes.json().catch(() => ({}));
+          console.error("Logo save failed:", saveRes.status, body);
+        }
+      } catch (err) {
+        console.error("Logo save network error:", err);
+      }
+    }
   };
 
   const downloadLogo = (variant: LogoVariant, format: "svg" | "png" = "svg") => {
@@ -757,13 +827,14 @@ export default function OnboardingPage() {
 
   const canProceed = (): boolean => {
     switch (step) {
-      case 0: return form.businessName.trim().length >= 2 && !!form.businessNameStyle;
+      case 0: return form.businessName.trim().length >= 2;
       case 1: return form.description.trim().length >= 5;
       case 2: return form.products.length >= 1;
       case 3: return true;
       case 4: return form.impressionWords.length === 3;
       case 5: return form.colors.length >= 1;
       case 6: return !!form.logoType;
+      case 7: return true;
       default: return false;
     }
   };
@@ -774,23 +845,40 @@ export default function OnboardingPage() {
     setDirection("forward");
     setForm({
       businessName: "",
-      businessNameStyle: "",
       description: "",
       products: [],
       tagline: "",
       impressionWords: [],
       colors: [],
-      logoType: "icon_text",
+      logoType: "combination_mark",
       selectedPaletteIndex: -1,
     });
     setLogoVariants([]);
     setSelectedVariant(0);
     setAiPalettes([]);
     setManualColorOpen(false);
+    setInlineDescSuggestions([]);
+    setInlineDescLoading(false);
+    setInlineDescFetched(false);
+    setInlineProdSuggestions([]);
+    setInlineProdLoading(false);
+    setInlineProdFetched(false);
+    setInlineTaglineSuggestions([]);
+    setInlineTaglineLoading(false);
+    setInlineTaglineFetched(false);
+    setAiImpressionWords([]);
+    setImpressionWordsLoading(false);
+    setImpressionWordsFetched(false);
+    setPromptCount(10);
+    setGeneratedPrompts([]);
+    setSavedProfileId(null);
+    setAiLogoTypes([]);
+    setLogoTypesLoading(false);
+    setLogoTypesFetched(false);
   };
 
-  // ─── Generating Screen ──────────────────────────────────────
-  if (view === "generating") {
+  // ─── Generating Prompts Screen ──────────────────────────────
+  if (view === "generating-prompts") {
     return (
       <div className={`onboarding-page ${sora.variable} ${ibmPlexMono.variable}`}>
         <div className="ab-atmosphere" />
@@ -802,9 +890,111 @@ export default function OnboardingPage() {
                 background: `linear-gradient(135deg, ${form.colors[0] || "#7C3AED"}, ${form.colors[1] || "#A855F7"})`,
               }}
             />
-            <h2>Crafting Your Logo</h2>
+            <h2>Writing Your Prompts</h2>
             <p>
-              AI is designing multiple variants for{" "}
+              AI is crafting {promptCount} unique logo prompts for{" "}
+              <strong>{brandName}</strong>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Prompts Review Screen ─────────────────────────────────
+  if (view === "prompts") {
+    return (
+      <div className={`onboarding-page ${sora.variable} ${ibmPlexMono.variable}`}>
+        <div className="ab-atmosphere" />
+
+        <nav className="ab-nav">
+          <a href="/" className="ab-nav-logo">
+            <div className="ab-nav-logo-text">
+              Logo<span>.</span>ai
+            </div>
+          </a>
+          <div className="ab-nav-right">
+            <UserButton
+              appearance={{
+                baseTheme: dark,
+                elements: { avatarBox: { width: "32px", height: "32px" } },
+              }}
+            />
+          </div>
+        </nav>
+
+        <div className="ob-prompts-page">
+          <div className="ob-prompts-header">
+            <h2>{generatedPrompts.length} Prompts for <strong>{brandName}</strong></h2>
+            <p>Review your AI-generated logo prompts below. Each will produce a unique logo design.</p>
+          </div>
+
+          <div className="ob-prompts-list">
+            {generatedPrompts.map((p, i) => {
+              const typeLabel = LOGO_TYPES.find((t) => t.id === p.type)?.label || p.type;
+              return (
+                <div key={i} className="ob-prompt-card">
+                  <div className="ob-prompt-card-header">
+                    <span className="ob-prompt-card-number">#{i + 1}</span>
+                    <span className="ob-prompt-card-type">{typeLabel}</span>
+                  </div>
+                  <p className="ob-prompt-card-text">{p.prompt}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="ob-prompts-actions">
+            <button
+              className="ob-btn-back"
+              onClick={() => {
+                setView("onboarding");
+                setGeneratedPrompts([]);
+              }}
+            >
+              {"\u2190"} Back to Brief
+            </button>
+            <button
+              className="ob-btn-next"
+              onClick={handleGenerateImages}
+            >
+              Generate {generatedPrompts.length} Logos {"\u2192"}
+            </button>
+          </div>
+        </div>
+
+        <footer className="ab-footer">
+          <div className="ab-footer-inner">
+            <div className="ab-footer-tagline">{FOOTER.tagline}</div>
+            <div className="ab-footer-links">
+              {FOOTER.links.map((link) => (
+                <a href={`/${link.toLowerCase()}`} key={link}>{link}</a>
+              ))}
+            </div>
+            <div className="ab-footer-copy">{FOOTER.copy}</div>
+            <div className="ab-footer-disclaimer">{FOOTER.disclaimer}</div>
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
+  // ─── Generating Images Screen ──────────────────────────────
+  if (view === "generating-images") {
+    return (
+      <div className={`onboarding-page ${sora.variable} ${ibmPlexMono.variable}`}>
+        <div className="ab-atmosphere" />
+        <div className="ob-generating">
+          <div>
+            <div
+              className="ob-generating-morph"
+              style={{
+                background: `linear-gradient(135deg, ${form.colors[0] || "#7C3AED"}, ${form.colors[1] || "#A855F7"})`,
+              }}
+            />
+            <h2>Generating Your Logos</h2>
+            <p>
+              AI is rendering {generatedPrompts.length} logo images for{" "}
               <strong>{brandName}</strong>
             </p>
           </div>
@@ -900,7 +1090,7 @@ export default function OnboardingPage() {
             </div>
 
             <div className="ob-dash-style-label">
-              Style: <strong>{currentLogo?.type?.replace("_", " + ")}</strong>
+              Style: <strong>{currentLogo?.type?.replace(/_v\d+$/, "").replace(/_/g, " ")}</strong>
             </div>
 
             {/* Download Buttons */}
@@ -1028,43 +1218,23 @@ export default function OnboardingPage() {
               onChange={(e) => setForm({ ...form, businessName: e.target.value })}
               autoFocus
             />
-            {form.businessName.trim().length >= 2 && (
-              <>
-                <p className="ob-dashboard-note" style={{ marginBottom: 12 }}>
-                  How should your name feel?
-                </p>
-                <div className="ob-name-style-grid">
-                  {NAME_STYLES.map((ns) => {
-                    const selected = form.businessNameStyle === ns.id;
-                    const previewFont = ns.id === "classic" ? "'Georgia', serif"
-                      : ns.id === "playful" ? "'Trebuchet MS', sans-serif"
-                      : "'Segoe UI', sans-serif";
-                    const previewWeight = ns.id === "bold" ? "800" : ns.id === "classic" ? "300" : "500";
-                    return (
-                      <button
-                        key={ns.id}
-                        className={`ob-name-style-card ${selected ? "selected" : ""}`}
-                        onClick={() => setForm({ ...form, businessNameStyle: ns.id })}
-                      >
-                        <div className="ob-checkmark">{"\u2713"}</div>
-                        <div
-                          className="ob-name-style-preview"
-                          style={{ fontFamily: previewFont, fontWeight: previewWeight }}
-                        >
-                          {ns.preview}
-                        </div>
-                        <div className="ob-name-style-label">{ns.label}</div>
-                        <div className="ob-name-style-desc">{ns.desc}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
           </div>
         );
 
-      case 1:
+      case 1: {
+        // Auto-fetch description suggestions on first render of this step
+        if (!inlineDescFetched && !inlineDescLoading && form.businessName.trim()) {
+          setInlineDescLoading(true);
+          generateAISuggestions(form, "description").then((results) => {
+            setInlineDescSuggestions(results);
+            setInlineDescLoading(false);
+            setInlineDescFetched(true);
+          }).catch(() => {
+            setInlineDescLoading(false);
+            setInlineDescFetched(true);
+          });
+        }
+
         return (
           <div className={direction === "forward" ? "ob-step" : "ob-step-back"} key={step}>
             <div className="ob-step-tag">{stepCfg.tag}</div>
@@ -1086,7 +1256,7 @@ export default function OnboardingPage() {
                 className="ob-ai-suggest-btn"
                 onClick={() => fetchSuggestions("description")}
               >
-                AI Suggest
+                Regenerate
               </button>
               <AISuggestionDropdown
                 suggestions={aiSuggestions}
@@ -1098,10 +1268,31 @@ export default function OnboardingPage() {
                 }}
               />
             </div>
+            <InlineSuggestions
+              suggestions={inlineDescSuggestions}
+              loading={inlineDescLoading}
+              label="Suggested descriptions"
+              variant="rows"
+              onSelect={(s) => setForm({ ...form, description: s })}
+            />
           </div>
         );
+      }
 
-      case 2:
+      case 2: {
+        // Auto-fetch product suggestions on first render of this step
+        if (!inlineProdFetched && !inlineProdLoading && form.businessName.trim()) {
+          setInlineProdLoading(true);
+          generateAISuggestions(form, "products").then((results) => {
+            setInlineProdSuggestions(results);
+            setInlineProdLoading(false);
+            setInlineProdFetched(true);
+          }).catch(() => {
+            setInlineProdLoading(false);
+            setInlineProdFetched(true);
+          });
+        }
+
         return (
           <div className={direction === "forward" ? "ob-step" : "ob-step-back"} key={step}>
             <div className="ob-step-tag">{stepCfg.tag}</div>
@@ -1119,7 +1310,7 @@ export default function OnboardingPage() {
                 type="text"
                 className="ob-input"
                 style={{ marginBottom: 0 }}
-                placeholder="Type a product or service…"
+                placeholder="Type a product or service\u2026"
                 value={customProduct}
                 onChange={(e) => setCustomProduct(e.target.value)}
                 onKeyDown={(e) => {
@@ -1149,7 +1340,7 @@ export default function OnboardingPage() {
                 className="ob-custom-add-btn ob-ai-suggest-inline"
                 onClick={() => fetchSuggestions("products")}
               >
-                AI Suggest
+                Regenerate
               </button>
               <AISuggestionDropdown
                 suggestions={aiSuggestions}
@@ -1179,10 +1370,35 @@ export default function OnboardingPage() {
                 ))}
               </div>
             )}
+            <InlineSuggestions
+              suggestions={inlineProdSuggestions}
+              loading={inlineProdLoading}
+              label="Suggested products & services"
+              variant="chips"
+              onSelect={(s) => {
+                if (form.products.length < 3 && !form.products.includes(s)) {
+                  setForm({ ...form, products: [...form.products, s] });
+                }
+              }}
+            />
           </div>
         );
+      }
 
-      case 3:
+      case 3: {
+        // Auto-fetch tagline suggestions on first render of this step
+        if (!inlineTaglineFetched && !inlineTaglineLoading && form.businessName.trim()) {
+          setInlineTaglineLoading(true);
+          generateAISuggestions(form, "tagline").then((results) => {
+            setInlineTaglineSuggestions(results);
+            setInlineTaglineLoading(false);
+            setInlineTaglineFetched(true);
+          }).catch(() => {
+            setInlineTaglineLoading(false);
+            setInlineTaglineFetched(true);
+          });
+        }
+
         return (
           <div className={direction === "forward" ? "ob-step" : "ob-step-back"} key={step}>
             <div className="ob-step-tag">{stepCfg.tag}</div>
@@ -1202,7 +1418,7 @@ export default function OnboardingPage() {
                 className="ob-ai-suggest-btn ob-ai-suggest-btn-input"
                 onClick={() => fetchSuggestions("tagline")}
               >
-                AI Suggest
+                Regenerate
               </button>
               <AISuggestionDropdown
                 suggestions={aiSuggestions}
@@ -1214,13 +1430,34 @@ export default function OnboardingPage() {
                 }}
               />
             </div>
-            <p className="ob-dashboard-note">
+            <InlineSuggestions
+              suggestions={inlineTaglineSuggestions}
+              loading={inlineTaglineLoading}
+              label="Suggested taglines"
+              variant="chips"
+              onSelect={(s) => setForm({ ...form, tagline: s })}
+            />
+            <p className="ob-dashboard-note" style={{ marginTop: 16 }}>
               You can skip this step if you prefer.
             </p>
           </div>
         );
+      }
 
-      case 4:
+      case 4: {
+        // Auto-fetch AI impression words on first render of this step
+        if (!impressionWordsFetched && !impressionWordsLoading && form.businessName.trim()) {
+          setImpressionWordsLoading(true);
+          generateAISuggestions(form, "impressionWords").then((results) => {
+            setAiImpressionWords(results);
+            setImpressionWordsLoading(false);
+            setImpressionWordsFetched(true);
+          }).catch(() => {
+            setImpressionWordsLoading(false);
+            setImpressionWordsFetched(true);
+          });
+        }
+
         return (
           <div className={direction === "forward" ? "ob-step" : "ob-step-back"} key={step}>
             <div className="ob-step-tag">{stepCfg.tag}</div>
@@ -1261,10 +1498,10 @@ export default function OnboardingPage() {
                 Add
               </button>
             </div>
-            {form.impressionWords.filter((w) => !ALL_ARCHETYPE_WORDS.includes(w)).length > 0 && (
+            {form.impressionWords.filter((w) => !ALL_ARCHETYPE_WORDS.includes(w) && !aiImpressionWords.includes(w)).length > 0 && (
               <div className="ob-custom-tags" style={{ marginTop: 12 }}>
                 {form.impressionWords
-                  .filter((w) => !ALL_ARCHETYPE_WORDS.includes(w))
+                  .filter((w) => !ALL_ARCHETYPE_WORDS.includes(w) && !aiImpressionWords.includes(w))
                   .map((w) => (
                     <span key={w} className="ob-custom-tag">
                       {w}
@@ -1279,6 +1516,49 @@ export default function OnboardingPage() {
                   ))}
               </div>
             )}
+
+            {/* AI Recommended Words */}
+            <div className="ob-ai-impression-section">
+              <div className="ob-inline-suggestions-header">
+                <span>AI Recommended Words</span>
+                <span className="ob-ai-tag">AI</span>
+              </div>
+              {impressionWordsLoading ? (
+                <div className="ob-inline-suggestions-loading">
+                  <div className="ob-ai-dropdown-spinner" />
+                  <p>Analyzing your brand&hellip;</p>
+                </div>
+              ) : (
+                <div className="ob-archetype-chips">
+                  {aiImpressionWords.map((w) => {
+                    const selected = form.impressionWords.includes(w);
+                    const disabled = form.impressionWords.length >= 3 && !selected;
+                    return (
+                      <button
+                        key={w}
+                        className={`ob-chip ob-chip-ai ${selected ? "selected" : ""} ${disabled ? "disabled" : ""}`}
+                        onClick={() => {
+                          if (disabled) return;
+                          if (selected) {
+                            setForm({ ...form, impressionWords: form.impressionWords.filter((x) => x !== w) });
+                          } else {
+                            setForm({ ...form, impressionWords: [...form.impressionWords, w] });
+                          }
+                        }}
+                      >
+                        {w}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="ob-archetype-divider">
+              <span>Or browse by archetype</span>
+            </div>
+
             {Object.entries(BRAND_ARCHETYPES).map(([archetype, { icon, words }]) => (
               <div key={archetype} className="ob-archetype-section">
                 <div className="ob-archetype-header">
@@ -1311,6 +1591,7 @@ export default function OnboardingPage() {
             ))}
           </div>
         );
+      }
 
       case 5: {
         // Fetch AI palettes on first render of this step
@@ -1358,24 +1639,21 @@ export default function OnboardingPage() {
                         setManualColorOpen(false);
                       }}
                     >
-                      <div className="ob-ai-palette-header">
-                        <span className="ob-ai-palette-name">{palette.name}</span>
-                        <span className="ob-ai-palette-tag">{palette.industryMatch}</span>
-                      </div>
-                      <div className="ob-ai-palette-colors">
+                      <div className="ob-ai-palette-bar">
                         {palette.colors.slice(0, 3).map((color, ci) => (
-                          <div key={ci} className="ob-ai-palette-swatch-wrap">
-                            <div
-                              className="ob-ai-palette-swatch"
-                              style={{ background: color }}
-                            />
-                            <span className="ob-ai-palette-swatch-label">
-                              {ci === 0 ? "Primary" : ci === 1 ? "Secondary" : "Accent"}
-                            </span>
+                          <div
+                            key={ci}
+                            className="ob-ai-palette-block"
+                            style={{ background: color }}
+                          >
+                            <span className="ob-ai-palette-hex">{color.toUpperCase()}</span>
                           </div>
                         ))}
                       </div>
-                      <div className="ob-ai-palette-rationale">{palette.rationale}</div>
+                      <div className="ob-ai-palette-info">
+                        <span className="ob-ai-palette-name">{palette.name}</span>
+                        <span className="ob-ai-palette-tag">{palette.industryMatch}</span>
+                      </div>
                     </button>
                   );
                 })}
@@ -1430,34 +1708,170 @@ export default function OnboardingPage() {
         );
       }
 
-      case 6:
+      case 6: {
+        // Auto-fetch AI logo types on first render of this step
+        if (!logoTypesFetched && !logoTypesLoading && form.businessName.trim()) {
+          setLogoTypesLoading(true);
+          fetchAILogoTypes(form).then((results) => {
+            setAiLogoTypes(results);
+            setLogoTypesLoading(false);
+            setLogoTypesFetched(true);
+          }).catch(() => {
+            setLogoTypesLoading(false);
+            setLogoTypesFetched(true);
+          });
+        }
+
+        // Map AI data to display rows, falling back to icon from LOGO_TYPES
+        const displayTypes = aiLogoTypes.length > 0
+          ? aiLogoTypes.map((ai) => {
+              const info = LOGO_TYPES.find((t) => t.id === ai.id);
+              return {
+                id: ai.id,
+                label: ai.label,
+                icon: info?.icon || "\u25C6",
+                percent: ai.percent,
+                description: ai.description,
+              };
+            })
+          : LOGO_TYPES.map((t, i) => ({
+              id: t.id,
+              label: t.label,
+              icon: t.icon,
+              percent: [35, 25, 15, 10, 7, 5, 3][i] || 5,
+              description: t.desc,
+            }));
+
         return (
           <div className={direction === "forward" ? "ob-step" : "ob-step-back"} key={step}>
             <div className="ob-step-tag">{stepCfg.tag}</div>
             <h2 className="ob-step-title">{stepCfg.title}</h2>
-            <p className="ob-dashboard-note" style={{ marginBottom: 28 }}>
-              Which layout best represents {brandName}?
+            <p className="ob-dashboard-note" style={{ marginBottom: 8 }}>
+              Ranked by industry usage for {brandName}.
+            </p>
+            <div className="ob-logo-type-ai-label">
+              AI Ranked for your industry <span className="ob-ai-tag">AI</span>
+            </div>
+
+            {logoTypesLoading ? (
+              <div className="ob-ai-palette-loading">
+                <div className="ob-ai-palette-loading-spinner" />
+                <p>Analyzing your industry&hellip;</p>
+              </div>
+            ) : (
+              <div className="ob-logo-type-list">
+                {displayTypes.map((t, idx) => {
+                  const selected = form.logoType === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      className={`ob-logo-type-row ${selected ? "selected" : ""}`}
+                      onClick={() => setForm({ ...form, logoType: t.id })}
+                    >
+                      <div className="ob-logo-type-rank">#{idx + 1}</div>
+                      <div className="ob-logo-type-icon">{t.icon}</div>
+                      <div className="ob-logo-type-info">
+                        <div className="ob-logo-type-name">{t.label}</div>
+                        <div className="ob-logo-type-desc">{t.description}</div>
+                      </div>
+                      <div className="ob-logo-type-bar-wrap">
+                        <div className="ob-logo-type-percent">{t.percent}%</div>
+                        <div className="ob-logo-type-bar">
+                          <div
+                            className="ob-logo-type-bar-fill"
+                            style={{ width: `${t.percent}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className={`ob-logo-type-check ${selected ? "visible" : ""}`}>
+                        {"\u2713"}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      case 7: {
+        const logoTypeLabel = LOGO_TYPES.find((t) => t.id === form.logoType)?.label || form.logoType;
+        const colorsLine = form.colors
+          .map((c) => `${getColorName(c)} ${c.toUpperCase()}`)
+          .join(" + ");
+
+        return (
+          <div className={direction === "forward" ? "ob-step" : "ob-step-back"} key={step}>
+            <div className="ob-step-tag">{stepCfg.tag}</div>
+            <h2 className="ob-step-title">{stepCfg.title}</h2>
+            <p className="ob-dashboard-note" style={{ marginBottom: 24 }}>
+              Review everything before we generate your logo.
             </p>
 
-            <div className="ob-select-grid cols-4">
-              {LOGO_TYPES.map((t) => {
-                const selected = form.logoType === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    className={`ob-select-card ${selected ? "selected" : ""}`}
-                    onClick={() => setForm({ ...form, logoType: t.id })}
-                  >
-                    <div className="ob-checkmark">{"\u2713"}</div>
-                    <div className="ob-select-card-icon">{t.icon}</div>
-                    <div className="ob-select-card-label">{t.label}</div>
-                    <div className="ob-select-card-desc">{t.desc}</div>
-                  </button>
-                );
-              })}
+            <div className="ob-brief-card">
+              <div className="ob-brief-mono">
+                <div className="ob-brief-mono-divider">{"\u2501\u2501\u2501"} YOUR BRAND BRIEF {"\u2501\u2501\u2501"}</div>
+                <div className="ob-brief-mono-row">
+                  <span className="ob-brief-mono-label">Name:</span> {form.businessName}
+                </div>
+                <div className="ob-brief-mono-row">
+                  <span className="ob-brief-mono-label">Business:</span> {form.description}
+                </div>
+                <div className="ob-brief-mono-row">
+                  <span className="ob-brief-mono-label">Services:</span> {form.products.length > 0 ? form.products.join(", ") : "None"}
+                </div>
+                <div className="ob-brief-mono-row">
+                  <span className="ob-brief-mono-label">Tagline:</span> {form.tagline ? `\u201C${form.tagline}\u201D` : "None"}
+                </div>
+                <div className="ob-brief-mono-row">
+                  <span className="ob-brief-mono-label">Impression:</span> {form.impressionWords.join(", ")}
+                </div>
+                <div className="ob-brief-mono-row ob-brief-mono-colors">
+                  <span className="ob-brief-mono-label">Colors:</span>
+                  <span className="ob-brief-mono-color-text">
+                    {colorsLine}
+                    {form.colors.map((c, i) => (
+                      <span
+                        key={i}
+                        className="ob-brief-mono-swatch"
+                        style={{ background: c }}
+                      />
+                    ))}
+                  </span>
+                </div>
+                <div className="ob-brief-mono-row">
+                  <span className="ob-brief-mono-label">Background:</span> White #FFFFFF <span className="ob-brief-mono-default">(default)</span>
+                </div>
+                <div className="ob-brief-mono-row">
+                  <span className="ob-brief-mono-label">Logo Type:</span> {logoTypeLabel}
+                </div>
+              </div>
+
+              {/* Prompt Count Selector */}
+              <div className="ob-brief-prompt-count">
+                <div className="ob-brief-prompt-count-label">
+                  How many prompts would you like?
+                </div>
+                <p className="ob-brief-prompt-count-hint">
+                  We recommend <strong>10</strong> for a strong variety set.
+                </p>
+                <div className="ob-brief-prompt-count-options">
+                  {[5, 10, 15, 20].map((n) => (
+                    <button
+                      key={n}
+                      className={`ob-brief-prompt-count-btn ${promptCount === n ? "selected" : ""}`}
+                      onClick={() => setPromptCount(n)}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         );
+      }
 
       default:
         return null;
@@ -1495,9 +1909,6 @@ export default function OnboardingPage() {
           <div className="ob-step-wrapper">
             {renderStep()}
           </div>
-
-          {/* Collapsible Preview */}
-          <LogoPreview form={form} generateSvg={generateLogoSVG} />
 
           {/* Save Error */}
           {saveError && (

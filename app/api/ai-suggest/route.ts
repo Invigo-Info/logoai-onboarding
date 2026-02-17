@@ -1,13 +1,22 @@
 // app/api/ai-suggest/route.ts
 // AI-powered suggestion engine for Logo.ai onboarding
+// Uses Replicate (Claude Opus 4.6) — same API key as logo generation
 // Prompts follow LogoForge AI system prompt rules
 
 import { NextResponse, NextRequest } from "next/server";
+import Replicate from "replicate";
+
+const TEXT_MODEL = "anthropic/claude-opus-4.6" as const;
 
 export async function POST(request: NextRequest) {
   let parsedField = "description";
 
   try {
+    const replicateToken = process.env.REPLICATE_API_TOKEN;
+    if (!replicateToken) {
+      throw new Error("REPLICATE_API_TOKEN not set");
+    }
+
     const { field, context } = await request.json() as {
       field: string;
       context: { businessName: string; description?: string; products?: string[]; impressionWords?: string[] };
@@ -107,6 +116,46 @@ Each word is a SINGLE adjective — not grouped, not paired.
 
 Return ONLY a JSON array of exactly 18 strings, no other text.`,
 
+      // STEP 7: Logo Types (AI-ranked by industry)
+      logoTypes: `You are a professional brand strategist. Analyze the business and determine the best logo layout options.
+
+Business: "${businessName}" — ${description || "a professional services business"}
+${products?.length ? `Services: ${products.join(", ")}` : ""}
+
+Determine the industry category, then generate 7 logo type options ranked by how frequently they are used in that specific industry.
+
+Use these exact logo type IDs and definitions:
+- combination_mark: Combination Mark — Icon paired with brand name. Most versatile and widely adaptable.
+- wordmark: Wordmark (Logotype) — Brand name only, styled typography. Clean and strong for name recognition.
+- lettermark: Lettermark (Monogram) — Initials only. Professional and compact.
+- brandmark: Brandmark (Symbol Only) — Icon only. Requires strong recognition.
+- emblem: Emblem — Text inside a badge, seal, or crest. Traditional and bold.
+- mascot: Mascot — Character-based logo. Friendly and memorable.
+- abstract: Abstract Mark — Geometric, non-literal symbol. Modern and unique.
+
+If the industry matches one of these, use these exact distributions:
+- Restaurants/Food: emblem 30, combination_mark 25, wordmark 20, mascot 15, brandmark 5, abstract 3, lettermark 2
+- Tech/SaaS: wordmark 35, abstract 20, combination_mark 20, lettermark 15, brandmark 5, emblem 3, mascot 2
+- Children/Education: mascot 35, combination_mark 30, wordmark 15, emblem 10, brandmark 5, abstract 3, lettermark 2
+- Cleaning/Home Services: combination_mark 40, wordmark 20, emblem 15, mascot 10, brandmark 8, abstract 5, lettermark 2
+- Pet Services: combination_mark 35, mascot 25, emblem 15, wordmark 10, brandmark 8, abstract 5, lettermark 2
+- Fitness/Gym: emblem 30, combination_mark 25, wordmark 20, abstract 10, brandmark 8, lettermark 5, mascot 2
+- Law/Finance: wordmark 35, lettermark 25, combination_mark 20, emblem 10, abstract 5, brandmark 3, mascot 2
+- Beauty/Wellness: wordmark 30, combination_mark 25, abstract 15, emblem 15, brandmark 8, lettermark 5, mascot 2
+- Coffee/Café: emblem 35, combination_mark 30, wordmark 15, mascot 10, brandmark 5, abstract 3, lettermark 2
+
+For industries not listed, use realistic market judgment. Percentages MUST add up to exactly 100.
+
+For each type, write 1 clear sentence explaining what it is and why it works for this specific industry.
+
+Return ONLY a JSON array of exactly 7 objects sorted by percent descending, each with:
+- "id": the logo type ID from the list above
+- "label": the display name
+- "percent": integer percentage (all 7 must sum to exactly 100)
+- "description": 1 sentence explaining why this type works for this industry
+
+No markdown, no explanation, just the JSON array.`,
+
       // STEP 6: Color Palettes
       // PDF: "Generate 5 AI color combination suggestions. Each has exactly 3
       // brand colors. White is NOT in the palette — always the background."
@@ -152,6 +201,8 @@ Return ONLY a JSON array of exactly 5 objects, no other text.`,
 
     if (isColorPalettes) {
       systemMessage = "You are LogoForge AI, an expert brand identity consultant with deep knowledge of color psychology, industry trends, and visual identity systems. Always respond with ONLY a valid JSON array of exactly 5 objects. Each object has: name (string), colors (array of exactly 3 hex strings — never include white #FFFFFF as a brand color), rationale (string), industryMatch (string). No markdown, no explanation, just the JSON array.";
+    } else if (field === "logoTypes") {
+      systemMessage = "You are LogoForge AI, an expert brand strategist with deep knowledge of logo design trends across every industry. Analyze the business and determine the best logo layout options ranked by industry usage frequency. Always respond with ONLY a valid JSON array of exactly 7 objects sorted by percent descending. Each object has: id (string), label (string), percent (integer, all 7 must sum to 100), description (string). No markdown, no explanation, just the JSON array.";
     } else if (field === "impressionWords") {
       systemMessage = "You are LogoForge AI, an expert brand strategist. Generate brand personality words from two proven archetypes: Archetype A (Pure/Reliable/Warm) and Archetype B (Healthy/Modern/Caring). NEVER suggest aggressive, cold/elitist, unfocused, or devaluing words. Always respond with ONLY a valid JSON array of strings. No markdown, no explanation, just the JSON array.";
     } else if (field === "products") {
@@ -163,36 +214,26 @@ Return ONLY a JSON array of exactly 5 objects, no other text.`,
     }
 
     const prompt = prompts[field] || prompts.description;
-    const maxTokens = isColorPalettes ? 1200 : field === "impressionWords" ? 800 : 1500;
+    // Claude Opus 4.6 on Replicate requires min 1024 tokens
+    const maxTokens = isColorPalettes ? 1200 : field === "logoTypes" ? 1500 : field === "impressionWords" ? 1024 : 1500;
 
-    const response = await fetch(
-      process.env.VERCEL_AI_GATEWAY_URL || "https://api.openai.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.VERCEL_AI_GATEWAY_API_KEY || process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: systemMessage },
-            { role: "user", content: prompt },
-          ],
-          temperature: 0.85,
-          max_tokens: maxTokens,
-        }),
-      }
-    );
+    /* ═══════════════════════════════════════════
+       REPLICATE (META LLAMA) CALL
+       ═══════════════════════════════════════════ */
 
-    if (!response.ok) {
-      throw new Error(`API responded with ${response.status}`);
-    }
+    const replicate = new Replicate({ auth: replicateToken });
 
-    const data = await response.json() as {
-      choices: { message: { content: string } }[];
-    };
-    const content = data.choices[0].message.content;
+    const output = await replicate.run(TEXT_MODEL, {
+      input: {
+        system_prompt: systemMessage,
+        prompt,
+        max_tokens: maxTokens,
+        temperature: 0.85,
+      },
+    });
+
+    // Replicate LLM models return an array of string tokens — join them
+    const content = Array.isArray(output) ? output.join("") : String(output);
 
     // Clean and parse
     const cleaned = content.replace(/```json\n?|```\n?/g, "").trim();
@@ -201,6 +242,12 @@ Return ONLY a JSON array of exactly 5 objects, no other text.`,
     if (isColorPalettes) {
       return NextResponse.json({
         suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 5) : [],
+      });
+    }
+
+    if (field === "logoTypes") {
+      return NextResponse.json({
+        suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 7) : [],
       });
     }
 
@@ -220,7 +267,7 @@ Return ONLY a JSON array of exactly 5 objects, no other text.`,
       suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 10) : [],
     });
   } catch (error) {
-    console.error("AI Gateway error:", error);
+    console.error("AI Suggest error:", error);
 
     // Fallback suggestions following PDF archetype rules
     const fallbacks: Record<string, unknown[]> = {
@@ -275,6 +322,15 @@ Return ONLY a JSON array of exactly 5 objects, no other text.`,
         { name: "Bold Coral", colors: ["#DC2626", "#FB923C", "#1E293B"], rationale: "Red primary commands attention, orange secondary adds warmth, charcoal accent balances", industryMatch: "Creative" },
         { name: "Royal Violet", colors: ["#7C3AED", "#A855F7", "#D97706"], rationale: "Deep violet primary feels creative, lighter purple supports it, gold accent adds warmth", industryMatch: "Premium" },
         { name: "Earthy Warmth", colors: ["#B8860B", "#166534", "#2D1B00"], rationale: "Gold primary feels organic, forest green secondary is natural, dark brown accent grounds", industryMatch: "Lifestyle" },
+      ],
+      logoTypes: [
+        { id: "combination_mark", label: "Combination Mark", percent: 35, description: "Icon paired with brand name — the most versatile and widely adaptable logo format." },
+        { id: "wordmark", label: "Wordmark", percent: 25, description: "Brand name only with styled typography — clean and strong for name recognition." },
+        { id: "emblem", label: "Emblem", percent: 15, description: "Text inside a badge, seal, or crest — traditional and bold for established brands." },
+        { id: "lettermark", label: "Lettermark", percent: 10, description: "Initials or monogram — professional and compact for long business names." },
+        { id: "brandmark", label: "Brandmark", percent: 7, description: "Standalone symbol without text — requires strong brand recognition." },
+        { id: "abstract", label: "Abstract Mark", percent: 5, description: "Geometric or abstract symbol — modern and unique for differentiation." },
+        { id: "mascot", label: "Mascot", percent: 3, description: "Character-based illustrated logo — friendly and memorable for approachable brands." },
       ],
     };
 

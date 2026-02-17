@@ -40,6 +40,10 @@ export default function SignInPage() {
       {/* Sign In Form */}
       <div className="auth-page-wrap">
         <SignIn
+          routing="path"
+          path="/sign-in"
+          signUpUrl="/sign-up"
+          fallbackRedirectUrl="/onboarding"
           appearance={{
             baseTheme: dark,
             variables: {
