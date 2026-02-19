@@ -9,6 +9,12 @@ import Replicate from "replicate";
 
 const TEXT_MODEL = "anthropic/claude-opus-4.6" as const;
 
+const IMAGE_MODELS = [
+  "google/nano-banana",
+  "black-forest-labs/flux-2-dev",
+] as const;
+const BATCH_SIZE = 5;
+
 const LOGO_TYPE_LABELS: Record<string, string> = {
   wordmark: "wordmark (text-only, stylized typography, no icons)",
   lettermark: "lettermark (initials/monogram inside a geometric shape)",
@@ -193,6 +199,54 @@ async function generateWithNanoBanana(replicate: Replicate, prompt: string): Pro
 }
 
 /* ═══════════════════════════════════════════
+   REPLICATE (BLACK-FOREST-LABS/FLUX-2-DEV)
+   ═══════════════════════════════════════════ */
+
+async function generateWithFlux2Dev(replicate: Replicate, prompt: string): Promise<string | null> {
+  try {
+    console.log("AI Logo [Flux-2-Dev]: Starting generation...");
+
+    const output = await replicate.run("black-forest-labs/flux-2-dev", {
+      input: {
+        prompt,
+        aspect_ratio: "1:1",
+        output_format: "png",
+      },
+    });
+
+    if (!output) {
+      console.error("AI Logo [Flux-2-Dev]: Output is null/undefined");
+      return null;
+    }
+
+    let imageUrl: string | null = null;
+
+    if (output && typeof (output as any).toString === "function" && String(output).startsWith("http")) {
+      imageUrl = String(output);
+    } else if (Array.isArray(output) && output.length > 0) {
+      const first = output[0];
+      if (typeof first === "string") {
+        imageUrl = first;
+      } else if (first && String(first).startsWith("http")) {
+        imageUrl = String(first);
+      }
+    } else if (typeof output === "string") {
+      imageUrl = output;
+    }
+
+    if (!imageUrl) {
+      console.error("AI Logo [Flux-2-Dev]: Could not extract image URL from output");
+      return null;
+    }
+
+    return imageUrl;
+  } catch (err) {
+    console.error("AI Logo [Flux-2-Dev]: Error:", err);
+    return null;
+  }
+}
+
+/* ═══════════════════════════════════════════
    IMAGE → SVG CONVERTER
    ═══════════════════════════════════════════ */
 
@@ -239,6 +293,7 @@ interface AILogoPayload {
   promptCount?: number;
   promptsOnly?: boolean;
   existingPrompts?: string[];
+  model?: string;
 }
 
 interface LogoResult {
@@ -247,6 +302,7 @@ interface LogoResult {
   imageUrl: string | null;
   prompt: string;
   fallback: boolean;
+  model: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -280,6 +336,7 @@ export async function POST(request: NextRequest) {
     promptCount = 5,
     promptsOnly = false,
     existingPrompts,
+    model,
   } = payload;
 
   const replicateToken = process.env.REPLICATE_API_TOKEN;
@@ -326,13 +383,29 @@ export async function POST(request: NextRequest) {
       console.log(`AI Logo: ${prompts.length} prompts generated successfully`);
     }
 
-    console.log(`AI Logo: Starting ${prompts.length} parallel Nano-Banana generations...`);
+    // If a specific model is requested, use it for all prompts; otherwise rotate in batches
+    const resolveModel = (i: number): string => {
+      if (model && IMAGE_MODELS.includes(model as typeof IMAGE_MODELS[number])) {
+        return model;
+      }
+      return IMAGE_MODELS[Math.floor(i / BATCH_SIZE) % IMAGE_MODELS.length];
+    };
+
+    const activeModel = model || "both (rotational)";
+    console.log(`AI Logo: Starting ${prompts.length} generations with model: ${activeModel}...`);
     const results: LogoResult[] = await Promise.all(
       prompts.map(async (prompt, i) => {
         const type = logoTypes[i] || "combination_mark";
+        const modelName = resolveModel(i);
 
         try {
-          const tempImageUrl = await generateWithNanoBanana(replicate, prompt);
+          let tempImageUrl: string | null = null;
+
+          if (modelName === "google/nano-banana") {
+            tempImageUrl = await generateWithNanoBanana(replicate, prompt);
+          } else if (modelName === "black-forest-labs/flux-2-dev") {
+            tempImageUrl = await generateWithFlux2Dev(replicate, prompt);
+          }
 
           if (tempImageUrl) {
             const converted = await convertImageToSvg(tempImageUrl);
@@ -353,15 +426,16 @@ export async function POST(request: NextRequest) {
                 imageUrl: permanentPngUrl || permanentSvgUrl || null,
                 prompt,
                 fallback: false,
+                model: modelName,
               };
-            }
+            } 
           }
         } catch (err) {
-          console.error(`AI Logo: Variant ${i} (${type}) failed:`, err);
+          console.error(`AI Logo: Variant ${i} (${type}) [${modelName}] failed:`, err);
         }
 
         // Fallback for this variant
-        return { type, svg: null, imageUrl: null, prompt, fallback: true };
+        return { type, svg: null, imageUrl: null, prompt, fallback: true, model: modelName };
       }),
     );
 
@@ -384,6 +458,7 @@ export async function POST(request: NextRequest) {
         imageUrl: null,
         prompt: "",
         fallback: true,
+        model: model || IMAGE_MODELS[0],
       })),
     });
   }

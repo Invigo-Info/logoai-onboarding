@@ -60,6 +60,7 @@ interface LogoVariant {
   svg: string;
   imageUrl?: string;
   prompt?: string;
+  model?: string;
 }
 
 interface GeneratedPrompt {
@@ -286,49 +287,54 @@ const fetchAIPrompts = async (
 
 /* ═══════════════════════════════════════════
    AI IMAGE GENERATION (Step 2)
-   Nano-Banana generates images from prompts
+   Both models generate images from the SAME prompts in parallel
    ═══════════════════════════════════════════ */
+
+const AI_IMAGE_MODELS = ["google/nano-banana", "black-forest-labs/flux-2-dev"] as const;
 
 const generateAILogosFromPrompts = async (
   form: FormData,
   prompts: GeneratedPrompt[],
 ): Promise<LogoVariant[]> => {
-  const AI_TIMEOUT_MS = 180000;
+  const AI_TIMEOUT_MS = 300000;
+
+  const callModel = async (model: string): Promise<LogoVariant[]> => {
+    const res = await fetch("/api/ai-logo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        businessName: form.businessName,
+        tagline: form.tagline,
+        colors: form.colors,
+        impressionWords: form.impressionWords,
+        logoTypes: prompts.map((p) => p.type),
+        description: form.description,
+        products: form.products,
+        existingPrompts: prompts.map((p) => p.prompt),
+        model,
+      }),
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status} from ${model}`);
+
+    const data = await res.json() as {
+      logos: { type: string; svg: string | null; imageUrl: string | null; prompt: string; fallback: boolean; model: string }[];
+    };
+
+    return data.logos.map((logo) => {
+      if (logo.imageUrl) {
+        return { type: logo.type, svg: generateLogoSVG({ ...form, logoType: logo.type }), imageUrl: logo.imageUrl, prompt: logo.prompt, model: logo.model };
+      }
+      if (logo.svg) {
+        return { type: logo.type, svg: logo.svg, prompt: logo.prompt, model: logo.model };
+      }
+      return { type: logo.type, svg: generateLogoSVG({ ...form, logoType: logo.type }), prompt: logo.prompt, model: logo.model };
+    });
+  };
 
   try {
     const result = await Promise.race([
-      (async () => {
-        const res = await fetch("/api/ai-logo", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            businessName: form.businessName,
-            tagline: form.tagline,
-            colors: form.colors,
-            impressionWords: form.impressionWords,
-            logoTypes: prompts.map((p) => p.type),
-            description: form.description,
-            products: form.products,
-            existingPrompts: prompts.map((p) => p.prompt),
-          }),
-        });
-
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const data = await res.json() as {
-          logos: { type: string; svg: string | null; imageUrl: string | null; prompt: string; fallback: boolean }[];
-        };
-
-        return data.logos.map((logo) => {
-          if (logo.imageUrl) {
-            return { type: logo.type, svg: generateLogoSVG({ ...form, logoType: logo.type }), imageUrl: logo.imageUrl, prompt: logo.prompt };
-          }
-          if (logo.svg) {
-            return { type: logo.type, svg: logo.svg, prompt: logo.prompt };
-          }
-          return { type: logo.type, svg: generateLogoSVG({ ...form, logoType: logo.type }), prompt: logo.prompt };
-        });
-      })(),
+      Promise.all(AI_IMAGE_MODELS.map((model) => callModel(model))).then((batches) => batches.flat()),
       new Promise<LogoVariant[]>((_, reject) =>
         setTimeout(() => reject(new Error("AI logo timeout")), AI_TIMEOUT_MS),
       ),
@@ -612,7 +618,7 @@ export default function OnboardingPage() {
 
   const [customProduct, setCustomProduct] = useState("");
   const [customImpression, setCustomImpression] = useState("");
-  const [promptCount, setPromptCount] = useState(10);
+  const [promptCount, setPromptCount] = useState(5);
   const [generatedPrompts, setGeneratedPrompts] = useState<GeneratedPrompt[]>([]);
   const [savedProfileId, setSavedProfileId] = useState<number | null>(null);
 
@@ -994,7 +1000,7 @@ export default function OnboardingPage() {
             />
             <h2>Generating Your Logos</h2>
             <p>
-              AI is rendering {generatedPrompts.length} logo images for{" "}
+              AI is rendering {generatedPrompts.length * 2} logo images across 2 models for{" "}
               <strong>{brandName}</strong>
             </p>
           </div>
@@ -1854,10 +1860,10 @@ export default function OnboardingPage() {
                   How many prompts would you like?
                 </div>
                 <p className="ob-brief-prompt-count-hint">
-                  We recommend <strong>10</strong> for a strong variety set.
+                  Each prompt generates <strong>2 logo variants</strong> — one per AI model (<strong>10 logos</strong> total).
                 </p>
                 <div className="ob-brief-prompt-count-options">
-                  {[5, 10, 15, 20].map((n) => (
+                  {[5].map((n) => (
                     <button
                       key={n}
                       className={`ob-brief-prompt-count-btn ${promptCount === n ? "selected" : ""}`}
